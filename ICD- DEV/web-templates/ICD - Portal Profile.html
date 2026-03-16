@@ -1,0 +1,968 @@
+{% extends "Layout 2 Column Wide Left" %}
+{% block aside %}
+{% assign editEmailLabel = snippets['ICD/Profile/EditEmail/Text'] %}
+{% assign clearDelegateLabel = snippets['ICD/Profile/DelegateUser/Button/Text'] %}
+{% assign nav = weblinks["Profile Navigation"] %}
+{% assign primary_nav = weblinks["Profile Navigation New"] %}
+
+{% if nav %}
+<ul class="nav-list">
+    <li class="nav-item">
+        <a class="nav-link reset-password-link"
+            href="{{ snippets['ICD/Profile/ResetPasswordURL'] }}"            
+            title="{{ snippets['ICD/Profile/ResetPasswordLink/Text'] }}" aria-roledescription="link">
+            <strong class="reset-password-text">{{ snippets['ICD/Profile/ResetPasswordLink/Text'] }}</strong>
+        </a>
+    </li>
+</ul>
+{% endif %}
+
+
+<!-- {% if primary_nav %}
+<ul class="nav-list">
+{% for link in primary_nav.weblinks %}
+  {% if link.name |downcase == editEmailLabel |downcase %}
+  <li class="nav-item">
+    <a id="editEmailAnchor" class="nav-link reset-password-link" href="#" title="Edit your email"
+      aria-roledescription="link" data-bs-toggle="modal" data-bs-target="#editEmailModal" aria-label='{{ link.name | escape }}'>
+      <strong class="reset-password-text">{{ link.name | escape }}</strong>
+    </a>
+  </li>
+  {% elsif link.name | downcase == clearDelegateLabel |downcase %}
+  <li class="nav-item">
+    <a id="clearDelegateUser" class="nav-link reset-password-link" href="#" title="Clear Delegated" aria-roledescription="link" onclick="fnclearDelegateUser()" aria-label='{{ link.name | escape }}'>
+      <strong class="reset-password-text" >{{ link.name | escape }}</strong>
+    </a>
+  </li>
+  {% else %}
+  <li class="nav-item">
+    <a class="nav-link reset-password-link" href='{{ link.url | escape }}' title='{{ link.tooltip | escape }}' aria-label='{{ link.name | escape }}'>
+      <strong class="reset-password-text">
+        {{ link.name | escape }}
+      </strong>
+    </a>
+    {% endif %}
+  </li>
+{% endfor %}
+</ul>
+{% endif %} -->
+
+{% assign urlParams = request.url %}
+{% include 'ICD - CSS'%}
+{% include 'ICD Helper - WebAPI Wrapper AJAX' %}
+{% include 'ICD - Modal'%}
+
+<style>
+    .nav-list {
+        list-style-type: none;
+        /* Remove bullets */
+        padding-left: 0;
+        /* Remove default padding */
+    }
+    .nav-item {
+        margin: 5px;
+        /* Remove margin around list items */
+        padding: 0;
+        /* Remove padding around list items */
+    }
+
+    .reset-password-link {
+        display: inline-block;
+        padding: 10px 20px;
+        background-color: #004184;
+        color: white;
+        border: 2px solid #004184;
+        border-radius: 4px;
+        text-decoration: none;
+        transition: background-color 0.3s, border-color 0.3s;
+    }
+
+    .reset-password-text {
+        font-size: larger;
+        font-family: Arial, sans-serif;
+        color: white;
+    }
+
+    .reset-password-link:hover {
+        background-color: #002d62;
+        border-color: #002d62;
+    }
+</style>
+{% endblock %}
+
+{% block main %}
+{% assign zContact = entities['contact'][user.id] %}
+{% assign membersDu = zContact.icd_delegateuser.id | default: null %}
+{% assign membership_status = zContact.icd_membershipstatus.value | default: null %}
+{% assign is_delegate_user = zContact.icd_isdelegateuser | default: false %}
+{% assign CASL = zContact.icd_caslcomplianceconsent.value | default: null %}
+{% assign PrivacyPolicy  = zContact.icd_privacypolicy | default: false %}
+{% assign LegalConsent = zContact.icd_legalconsent | default: false %}
+{% assign MemberCodeConduct = zContact.icd_membercodeofconduct | default: false %}
+{% assign termsandconditions = zContact.icd_termsandconditions | default: false %}
+{% assign alreadyProvided = zContact.bdo_alreadyprovided | default: false %}
+{% assign ResetPasswordURL = settings["Azure/B2CResetPasswordURL"] %}
+
+<!-- Get DU members -->
+{% fetchxml duMembers cache: "false"%}
+<fetch>
+  <entity name="contact">
+    <attribute name="contactid" />
+    <attribute name="firstname" />
+    <filter>
+      <condition attribute="statecode" operator="eq" value="0" />
+      <condition attribute="icd_delegateuser" operator="eq" value="{{ user.id }}" />
+      <condition attribute="createdon" operator="on-or-before" value="{{ now | date: 'o' }}" />
+    </filter>
+  </entity>
+</fetch>
+{% endfetchxml %}
+
+<!-- Language POC -->
+
+{% assign languagePreferenceCode = zContact.icd_languagepreference.value | default: "en-US" %}
+{% if languagePreferenceCode == "100000002" %}
+    {% assign userLanguage = "fr-FR" %}
+{% else %}
+    {% assign userLanguage = "en-US" %}
+{% endif %}
+<!-- Language POC -->
+ 
+<!-- Attestation Modal -->
+<div class="modal fade" id="attestationModal" tabindex="-1" aria-labelledby="attestationModalLabel" aria-hidden="true"  data-bs-keyboard="false" >
+  <div class="modal-dialog modal-dialog-centered" >
+      <div class="modal-content">
+          <!-- Modal Header -->
+          <div class="modal-header">
+              <h3 class="modal-title" id="attestationModalLabel">{{snippets['ICD/Profile/Attestation/Title']}}</h3>
+          </div>
+
+          <!-- Modal Body -->
+          <div class="modal-body">
+              <form id="attestationForm">
+                {% if CASL == null  and membership_status == 100000005 %}
+                  <!-- CASL Compliance Section and is_delegate_user  == false-->
+                  <div class="table-info required">
+                    <label id="icd_caslcomplianceconsent_label" class="field-label">{{snippets['ICD/Profile/CASL/Title']}}</label>
+                    <div class="description above">
+                      {{snippets['ICD/Profile/CASL/Description']}} 
+                        <em><a href="https://www.icd.ca/about-the-icd/corporate-governance/policies/privacy-policy">ICD Policies</a></em>.
+                    </div>
+                    <div class="control">
+                        <span id="icd_caslcomplianceconsent" class="picklist vertical" aria-roledescription="CASL Compliance" role="presentation" title="Please select an item in this list">
+                            <input id="icd_caslcomplianceconsent_0" type="radio" name="icd_caslcomplianceconsent" value="100000000" checked required>
+                            <label for="icd_caslcomplianceconsent_0"><span class="visually-hidden">{{snippets['ICD/Profile/CASL/Title']}}</span>{{snippets['ICD/Profile/CASL/Consent']}}</label><br>
+                            <input id="icd_caslcomplianceconsent_1" type="radio" name="icd_caslcomplianceconsent" value="100000001" required>
+                            <label for="icd_caslcomplianceconsent_1"><span class="visually-hidden">{{snippets['ICD/Profile/CASL/Title']}}</span>{{snippets['ICD/Profile/CASL/NoConsent']}}</label>
+                        </span>
+                    </div>
+                  </div>
+
+
+                {% endif %}
+                  {% if LegalConsent == false and  membership_status <> null and is_delegate_user == true %}
+                    <!-- Legal Consent Checkbox and is_delegate_user == false-->
+                    <br>
+                    <div class="table-info required">
+                      <input id="icd_legalconsent" type="checkbox" name="icd_legalconsent" aria-required="true" required>
+                      <label for="icd_legalconsent" id="icd_legalconsent_label" class="field-label">{{snippets['Profile/LegalConsent/Label/Text']}}</label>
+                  </div>
+                  <div class="control">
+                      <span class="checkbox">
+                          <label class="form-check-label" for="icd_legalconsent">
+                            {{ snippets['Profile/LegalConsent/Text'] }}<br><br>
+                          </label>
+                      </span>
+                  </div>
+
+                {% endif %}
+                  {% if  PrivacyPolicy == false and  membership_status == 100000005  %}
+                   <!-- Privacy Policy Checkbox is_delegate_user  == false or-->
+                   {{snippets['ICD/Profile/Attestation/PrivacyPolicy']}}
+
+                   <!-- <br>
+                  <div class="table-info required">
+                    <input id="icd_privacypolicy" type="checkbox" name="icd_privacypolicy" aria-required="true" required>
+                    <label for="icd_privacypolicy" id="icd_privacypolicy_label" class="field-label">Privacy Policy</label>
+                  </div>
+                  <div class="control">
+                    <span class="checkbox">
+                        <label class="form-check-label" for="icd_privacypolicy">
+                            Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.<br><br>
+                        </label>
+                    </span>
+                  </div> -->
+
+                {% endif %}
+                {% if  membership_status == 100000005 and MemberCodeConduct == false %}
+                  <!-- Member Code Of Conduct Checkbox -->
+
+                  {{snippets['ICD/Profile/Attestation/CodeOfConduct']}}
+                  <!-- <br>
+                 <div class="table-info required">
+                   <input id="icd_membercodeofconduct" type="checkbox" name="icd_membercodeofconduct" aria-required="true" required>
+                   <label for="icd_membercodeofconduct" id="icd_membercodeofconduct_label" class="field-label">Member Code Of Conduct</label>
+                 </div>
+                 <div class="control">
+                   <span class="checkbox">
+                       <label class="form-check-label" for="icd_membercodeofconduct">
+                           Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.<br><br>
+                       </label>
+                   </span>
+                 </div> -->
+
+               {% endif %}
+               {% if membership_status == 100000005 and termsandconditions == false %}
+                <!-- Terms and Conditions Checkbox -->
+                {{snippets['ICD/Profile/Attestation/TermAndCondition']}}
+                <!-- <br>
+                <div class="table-info required">
+                  <input id="icd_termsandconditions" type="checkbox" name="icd_termsandconditions" aria-required="true" required>
+                  <label for="icd_termsandconditions" id="icd_termsandconditions_label" class="field-label">Terms and Conditions</label>
+                </div>
+                <div class="control">
+                  <span class="checkbox">
+                    <label class="form-check-label" for="icd_termsandconditions">
+                      Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.<br><br>
+                    </label>
+                  </span>
+                </div> -->
+              {% endif %}
+              
+              </form>
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="modal-footer">
+              <button type="button" class="btn btn-primary" id="submitAttestationButton" disabled>{{snippets['ICD/Profile/Attestation/Button']}}</button>
+          </div>
+      </div>
+  </div>
+</div>
+<script>
+
+  // Listen for changes on any of the specified checkboxes
+  $('#icd_legalconsent, #icd_privacypolicy, #icd_membercodeofconduct, #icd_termsandconditions').on('change', function() {
+      // Initialize a flag to track the condition
+      let allChecked = true;
+      console.log("testing");
+
+      // Check each checkbox if it exists and is checked
+      $('#icd_legalconsent, #icd_privacypolicy, #icd_membercodeofconduct, #icd_termsandconditions').each(function() {
+          if ($(this).length > 0 && !$(this).prop('checked')) {
+              allChecked = false; // If the checkbox exists and is not checked, set flag to false
+          }
+      });
+
+      // Enable or disable the submit button based on the flag
+      $('#submitAttestationButton').prop('disabled', !allChecked);
+  });
+
+ $('#submitAttestationButton').click(function() {
+  showLoadingModal("Please wait... Saving your attestation");
+  var updatedAttestationObj = {};
+    // Loop through the form and collect the checked fields
+    $('#attestationModal').find('input').not('button').each(function() {
+      var fieldName = $(this).attr('name');  // Get the name of the field
+      var fieldValue = $(this).val();        // Get the value of the field
+
+      // Add the field to the object if it's checked (for checkboxes and radios)
+      if ($(this).is(':radio') && $(this).prop('checked')) {
+          // Check if the field is icd_caslcomplianceconsent and convert to int
+          if (fieldName === 'icd_caslcomplianceconsent') {
+              updatedAttestationObj[fieldName] = parseInt(fieldValue, 10) || 0; // Convert to integer
+          } else {
+              updatedAttestationObj[fieldName] = fieldValue;
+          }
+      } else if ($(this).is(':checkbox') && $(this).prop('checked')) {
+          // Check if the field is icd_caslcomplianceconsent and convert to int
+          if (fieldName === 'icd_caslcomplianceconsent') {
+              updatedAttestationObj[fieldName] = 1; // Checkbox is checked, set to 1
+          } else {
+              updatedAttestationObj[fieldName] = true;
+          }
+      }
+    });
+
+      console.log(updatedAttestationObj);
+  webapi.safeAjax({
+      type: 'PATCH',
+      contentType: 'application/json',
+      url: '/_api/contacts({{ user.id}})',
+      data: JSON.stringify(updatedAttestationObj),
+      async: true,
+      success: function (response) {
+        // Show success message
+        hideLoadingModal();
+        showAlert('success', 'Attestation updated successfully!');
+        $('#attestationModal').modal('hide');
+  
+      },
+      error: function (error) {
+        // Show error message
+        hideLoadingModal();
+        showAlert('error', 'An error occurred while updating the attestation.');
+
+      }
+    });
+
+ });
+
+</script>
+
+
+<!-- Edit Email Modal-->
+<div class="modal fade" id="editEmailModal" tabindex="-1" aria-labelledby="editEmailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <h5 class="modal-title" id="editEmailModalLabel">{{ snippets['ICD/Profile/EditEmailModal/Text'] }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="emailAddress" class="form-label">{{ snippets['ICD/Profile/EditEmailModal/Title/Text'] }}</label>
+                    <input type="email" class="form-control" id="emailAddress" aria-describedby="emailHelp">
+                    <div id="emailHelp" class="form-text"></div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ snippets['ICD/Profile/EditEmailModal/Cancel/Text'] }}</button>
+                <button type="button" class="btn btn-primary" id="updateEmailButton">{{snippets['ICD/Profile/EditEmailModal/Update/Text']}}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script type="text/javascript" src="https://services.postcodeanywhere.co.uk/js/address-3.91.js"></script>
+<script>
+  {% include "AddressComplete" line1: "address1_line1" line2: "address1_line2" city: "address1_city" province: "address1_stateorprovince" postalcode: "address1_postalcode" country: "address1_country" LimitCountry: "CAN ,AFG, ALB, DZA, AND, AGO, ATG, ARG, ARM, AUS, AUT, AZE, BHS, BHR, BGD, BRB, BLR, BEL, BLZ, BEN, BTN, BOL, BIH, BWA, BRA, BRN, BGR, BFA, BDI, CPV, KHM, CMR, CAF, TCD, CHL, CHN, COL, COM, COG, COD, CRI, HRV, CUB, CYP, CZE, DNK, DJI, DMA, DOM, ECU, EGY, SLV, GNQ, ERI, EST, SWZ, ETH, FJI, FIN, FRA, GAB, GMB, GEO, DEU, GHA, GRC, GRD, GTM, GIN, GNB, GUY, HTI, HND, HUN, ISL, IND, IDN, IRN, IRQ, IRL, ISR, ITA, JAM, JPN, JOR, KAZ, KEN, KIR, KWT, KGZ, LAO, LVA, LBN, LSO, LBR, LBY, LIE, LTU, LUX, MDG, MWI, MYS, MDV, MLI, MLT, MHL, MRT, MUS, MEX, FSM, MDA, MCO, MNG, MNE, MAR, MOZ, MMR,NAM, NRU, NPL, NLD, NZL, NIC, NER, NGA, PRK, MKD, NOR, OMN, PAK, PLW, PAN, PNG, PRY, PER, PHL, POL, PRT, QAT, ROU, RUS, RWA, KNA, LCA, VCT, WSM, SMR, STP, SAU, SEN, SRB, SYC, SLE, SGP, SVK, SVN, SLB, SOM, ZAF, KOR, SSD, ESP, LKA, SDN, SUR, SWE, CHE, SYR, TWN, TJK, TZA, THA, TLS, TGO, TON, TTO, TUN, TUR, TKM, TUV, UGA, UKR, ARE, GBR, USA, URY, UZB, VUT, VAT, VEN, VNM, YEM, ZMB, ZWE" %}
+    // Set session variable
+    sessionStorage.setItem("Application/AccountLookup/Typing", "{{ snippets['Application/AccountLookup/Typing'] | escape }}");
+    sessionStorage.setItem("Application/AccountLookup/Checkbox", "{{ snippets['Application/AccountLookup/Checkbox'] | escape }}");
+	
+	$(document).ready(function () {
+	
+		// Make a field required
+		function MakeRequired(fieldName) {
+			var field = $('#' + fieldName);
+			field.prop('required', true).closest('.control').prev().addClass('required');
+
+			var validator = $('<span>', {
+				id: fieldName + 'Validator',
+				style: 'display:none;',
+				controltovalidate: fieldName,
+				errormessage: '&lt;a href="#"' + fieldName + '_label&gt;' + $('#' + fieldName + '_label').html() + ' is a required field.&lt;/a&gt;',
+				evaluationfunction: function() {
+					return field.val() != null && field.val() !== '';
+				}
+			})[0];
+
+			Page_Validators.push(validator);
+		}
+
+		// Remove required status from a field
+		function MakeNotRequired(fieldName) {
+			var field = $('#' + fieldName);
+			field.prop('required', false).closest('.control').prev().removeClass('required');
+
+			Page_Validators = Page_Validators.filter(function(validator) {
+				return validator.id !== fieldName + 'Validator';
+			});
+		}
+
+		$('#bdo_optintoreceivet2202').on('change', function () {			
+			if ($(this).is(':checked') && {{alreadyProvided}} == false) {
+				// If checked, show parent tr of #icd_sin
+				$('#bdo_socialinsurancenumber').closest('tr').show();
+				MakeRequired('bdo_socialinsurancenumber');
+			} else {
+				// If unchecked, hide parent tr of #icd_sin
+				$('#bdo_socialinsurancenumber').closest('tr').hide();
+				MakeNotRequired('bdo_socialinsurancenumber');
+			}
+		});
+			
+		// Trigger change event to handle initial state
+		$('#bdo_optintoreceivet2202').trigger('change');
+	});
+
+  $(window).on('load', function () {
+		
+	var divOptInText = `<div>
+							{{ snippets["Contact/T2202"] }}
+						</div>`;
+		
+	var optInParentTd = $('#bdo_optintoreceivet2202_label').closest('td');
+	optInParentTd.append(divOptInText);
+    
+    if ($('#MessagePanel').hasClass('alert-success')) {
+        $('#MessagePanel').hide();
+        window.location.href = "{{ snippets['Link/icd.ca/my-account'] }}";
+      }
+
+    //Validation code for phone number start 
+	// Function to format the phone number
+	function formatPhoneNumber(inputField) {
+		var phoneNumber = $(inputField).val().replace(/\D/g, ''); // Remove non-digit characters
+		var formattedPhoneNumber = '';
+
+		// Automatically format as XXX-XXX-XXXX
+		if (phoneNumber.length >= 7) {
+			formattedPhoneNumber = phoneNumber.substring(0, 3) + '-' + phoneNumber.substring(3, 6) + '-' + phoneNumber.substring(6, 10);
+		} else if (phoneNumber.length >= 4) {
+			formattedPhoneNumber = phoneNumber.substring(0, 3) + '-' + phoneNumber.substring(3, 6);
+		} else {
+			formattedPhoneNumber = phoneNumber;
+		}
+
+		$(inputField).val(formattedPhoneNumber); // Update the input field with the formatted number
+	}
+
+	// Function to validate phone number format
+	function validatePhoneNumber(inputField) {
+		var phoneNumber = $(inputField).val();
+		var digitsOnly = phoneNumber.replace(/\D/g, '');
+
+		var phoneRegex = /^\d{3}-\d{3}-\d{4}$/;
+
+		return phoneRegex.test(phoneNumber) && digitsOnly.length === 10;
+	}
+
+	// Central validation check for all fields
+	function validateAllPhoneFields() {
+		var allValid = true;
+		var anyFieldFilled = false;
+
+		phoneFields.each(function () {
+			var value = $(this).val().trim();
+
+			if (value !== '') {
+				anyFieldFilled = true;
+
+				if (!validatePhoneNumber(this)) {
+					showAlert('error', 'Invalid phone number or wrong format'); // Replace with your alert function
+					allValid = false;
+				}
+			}
+		});
+
+		if (!anyFieldFilled || !allValid) {
+			$('#UpdateButton').prop('disabled', true);
+		} else {
+			$('#UpdateButton').prop('disabled', false);
+		}
+	}
+
+	// Check if fields exist before binding
+	var phoneFields = $('#mobilephone');
+
+	if (phoneFields.length > 0) {
+		// On input, format and validate fields
+		phoneFields.on('input', function () {
+			formatPhoneNumber(this);
+			
+		});
+
+		// On blur, validate the individual phone number
+		phoneFields.on('blur', function () {
+			if (!validatePhoneNumber(this)) {
+				showAlert('error', 'Invalid phone number'); // Replace with your alert function
+				$('#UpdateButton').prop('disabled', true);
+			} else {
+				validateAllPhoneFields(); // Re-check all fields in case of multiple inputs
+			}
+		});
+
+		// Validate on load
+		validateAllPhoneFields();
+	}
+	//End of code for phone number validation 
+
+    if($('#attestationModal').find('input').not('button').length>0){
+      $('#attestationModal').modal('show');
+    }
+   
+
+    // Disable, grey out, and add tooltip to first name, and last name fields
+    $('#firstname, #lastname').prop('disabled', true).each(function () {
+      $(this)
+        .attr('style', function (i, style) {
+          return (style || '') + 'background-color: #f2f2f2 !important;';
+        })
+        .attr('title', 'To change your name, please contact ICD support.');
+    });
+
+    //START code to grey our address field when using candapostApi Field------------------------->
+    $('#override_address1_line1').on('change', function () {
+      if ($(this).is(':checked')) {
+        // Remove the inline background color CSS with !important if the checkbox is checked
+        $('#address1_line1, #address1_city, #address1_stateorprovince, #address1_postalcode,#icd_canadastateorprovince, #address1_country').each(function () {
+          $(this).css('background-color', ''); // Remove inline style
+          $(this).attr('style', function (i, style) {
+            return style ? style.replace(/background-color:.*?;/gi, '') : '';
+          });
+          $(this).removeAttr('readonly');
+        });
+        $('#address1_line2').prop('disabled', false).removeAttr('readonly');
+        toggleProvinceInput();
+        
+      } else {
+        // Add the inline background  color CSS with !important if the checkbox is unchecked
+        $('#address1_line1, #address1_city, #address1_stateorprovince, #address1_postalcode,#icd_canadastateorprovince, #address1_country').each(function () {
+          $(this).attr('style', function (i, style) {
+            return (style || '') + 'background-color: #f2f2f2 !important;';
+          });
+          $(this).removeAttr('readonly');
+        });
+        $('#address1_line2').prop('disabled', false).removeAttr('readonly');
+        toggleProvinceInput();
+        
+      }
+    });
+
+    // Trigger change event on page load to apply the initial state
+    $('#override_address1_line1').trigger('change');
+
+    // Move #icd_canadastateorprovince into the same <td> as #icd_stateorprovince
+    $('#address1_stateorprovince').closest('td').append($('#icd_canadastateorprovince'));
+
+    // Hide the Canadian province input initially
+    $('#icd_canadastateorprovince').hide();
+
+    function toggleProvinceInput() {
+      $('#icd_canadastateorprovince_label').closest('tr').hide();
+      var countryValue = $('#address1_country').val();
+      if (countryValue === 'Canada' && $('#override_address1_line1').is(':checked')) {
+        // Show the Canadian province input and hide the other one
+        $('#address1_stateorprovince').hide();
+        $('#icd_canadastateorprovince').show();
+      } else {
+        // Show the default state/province input and hide the Canadian province one
+        //$('#icd_stateorprovince').val('');
+        $('#address1_stateorprovince').show();
+        $('#icd_canadastateorprovince').hide();
+      }
+    }
+
+    // Trigger toggle on page load 
+    toggleProvinceInput();
+
+    // Listen for changes to the country field
+    $('#address1_country').on('change', function () {
+      toggleProvinceInput();
+    });
+
+    $('#icd_canadastateorprovince').on('change', function () {
+      // Clear the icd_stateorprovince field
+      $('#icd_stateorprovince').val('');
+
+      // Get the selected option's text
+      var selectedText = $(this).find('option:selected').text();
+
+      // Copy the selected text to the icd_stateorprovince field
+      $('#address1_stateorprovince').val(selectedText);
+    });
+    //END code to grey our address  field when using candapostApi Field------------------------->
+
+    // Step 1: Capture the full query parameter value
+    var urlParams = "{{ urlParams }}";
+
+    // Step 2: Decode the encoded URL parameter
+    var decodedUrlParams = decodeURIComponent(urlParams);
+    //alert(decodedUrlParams);
+    var params = decodedUrlParams.split('ReturnUrl=')[1];
+    //alert(params);
+
+ try {
+      if ($('#MessagePanel').hasClass('alert-success')) {
+          // Step 2: Decode the encoded URL parameter
+          var decodedUrlParams = decodeURIComponent(urlParams);
+          //alert(decodedUrlParams);
+          
+          // Step 3: Extract the ReturnUrl value
+          var params = decodedUrlParams.split('ReturnUrl=')[1];
+
+          if (decodedUrlParams.includes("formType")){
+            // Step 4: Construct the new URL and redirect
+            var baseUrl = window.location.origin;
+            var newUrl = baseUrl + params;
+            window.location.href = newUrl;
+        }
+      }
+    } catch (error) {
+        // Handle errors and log them
+        console.error("An error occurred:", error.message);
+       // alert("An error occurred while processing the URL. Please try again.");
+    }
+
+
+
+
+/*
+    // Step 3: Extract formType and prodId using regex
+    var formTypeMatch = decodedUrlParams.match(/formType=([^&]*)/);
+    var prodIdMatch = decodedUrlParams.match(/prodId=([^&]*)/);
+
+    var formType = formTypeMatch ? formTypeMatch[1] : null;
+    var prodId = prodIdMatch ? prodIdMatch[1] : null;
+
+    if (formType && prodId) {
+      if ($('#MessagePanel').hasClass('alert-success')) {
+        var baseUrl = window.location.origin;
+        var newUrl = baseUrl + "/en-US/Application/?formType=" + formType + "&prodId=" + prodId;
+
+        // Redirect to the dynamically constructed URL
+        window.location.href = newUrl;
+      }
+    }
+*/
+    // Create the "Edit Email" button element
+    const editEmailButton = $(`
+          <li class="nav-item">
+            <a id ="editEmailAnchor"class="nav-link reset-password-link" href="#" title="Edit your email" aria-roledescription="link" data-bs-toggle="modal" data-bs-target="#editEmailModal">
+              <strong class="reset-password-text">{{ snippets['ICD/Profile/EditEmail/Text'] }}</strong>
+            </a>
+          </li>
+        `);
+    $('.nav-list').append(editEmailButton);
+    const element = $('.nav-link.reset-password-link');
+    const width = element.outerWidth();
+    const height = element.outerHeight();
+
+    // Apply the width and height to the button with ID  
+    $('#editEmailAnchor').css({
+      'width': width + 'px',
+      'height': height + 'px'
+    });
+
+    {% if is_delegate_user == false and membersDu != null %}
+        const DelegateUserbtns = $(`
+            <li class="nav-item">
+              <a id="clearDelegateUser" class="nav-link reset-password-link" href="#" title="Clear Delegated" aria-roledescription="link" onclick="fnclearDelegateUser()">
+                <strong class="reset-password-text">{{snippets['ICD/Profile/DelegateUser/Button/Text']}}</strong>
+              </a>
+            </li>
+
+          `);
+        //if ($('#icd_delegateuser_name').val() !== '') {
+        $('.nav-list').append(DelegateUserbtns);
+        //}
+
+        $('#icd_delegatefirstname, #icd_delegatelastname, #icd_email').prop('disabled', true).each(function () {
+          $(this)
+            .attr('style', function (i, style) {
+              return (style || '') + 'background-color: #f2f2f2 !important;';
+            })
+        });
+
+
+        // Apply the width and height to the button with ID 'abc'
+        $('#clearDelegateUser').css({
+        'width': width + 'px',
+        'height': height + 'px'
+        });
+    {% elseif duMembers.results.entities.size > 0 %}
+        const DelegateUserbtns = $(`
+        {% for duMember in duMembers.results.entities %}
+            <li class="nav-item">
+                <a id="EditDelegateMember{{forloop.index}}" 
+                class="nav-link reset-password-link" 
+                href="javascript:void(0);" 
+                title="Edit Member" 
+                aria-roledescription="link" 
+                onclick="window.location.href='{{sitemarkers['Member Profile Page'].url}}?id={{duMember.contactid}}';">
+                <strong class="reset-password-text">Edit {{duMember.firstname}}</strong>
+                </a>
+            </li>
+            {% endfor %}
+        `);
+        {% for duMember in duMembers.results.entities %}
+            $('.nav-list').append(DelegateUserbtns);
+            // Apply the width and height to the button with ID 'abc'
+            $('#EditDelegateMember{{forloop.index}}').css({
+                'width': width + 'px',
+                'height': height + 'px'
+            });
+        {% endfor %}
+    {% else %}
+        const DelegateUserbtns = null;
+    {% endif %}
+
+
+  var taxExemptionField = $("input[id$='icd_taxexemptionnumber']");
+
+    if (taxExemptionField.length > 0) {
+        console.log("Field found, adding mask logic");
+
+        taxExemptionField.on("input", function () {
+            var value = $(this).val().replace(/\D/g, ""); // Remove non-numeric characters
+            console.log("Raw input: " + value);
+
+            if (value.length > 9) {
+                value = value.substring(0, 9) + " RT" + value.substring(9, 13);
+            } else if (value.length > 0) {
+                value = value.substring(0, 9);
+            }
+
+            console.log("Formatted input: " + value);
+            $(this).val(value);
+        });
+
+        // Optional: Enforce proper formatting when the field loses focus
+        taxExemptionField.on("blur", function () {
+            var finalValue = $(this).val();
+            if (finalValue.length === 9) {
+                $(this).val(finalValue + " RT0000"); // Auto-fill last part if missing
+                console.log("Auto-filled missing part: " + $(this).val());
+            }
+        });
+    } else {
+        console.log("Field not found");
+    }
+    
+    
+
+
+    //account lookup
+    $('#icd_account').closest('td').hide();
+    var divOrgCheckbox = `
+        <input type="text" name="companyInfoCompleteSearch" id="companyInfoCompleteSearch"
+            class="text form-control" placeholder="{{ snippets["Application/AccountLookup/Typing"] }}"
+            autocomplete="pca-override" aria-label="companyInfoCompleteSearch">
+        <div class="help-block">
+            <div>
+                <label style="font-weight: normal;">
+                    <input onclick="" type="checkbox" id="override_icdOrganisationName">
+                    {{ snippets["Application/AccountLookup/Checkbox"] }}
+                </label>
+            </div>
+        </div>`;
+
+    // Find the parent td of the input with id "icd_name" and append the new HTML
+    var parentTd = $('#adx_organizationname').closest('td');
+    parentTd.append(divOrgCheckbox);
+
+    $('#override_icdOrganisationName').on('change', function () {
+      if ($(this).is(':checked')) {
+        // If the checkbox is checked, hide icd_name and show companyInfoCompleteSearch
+        // If the checkbox is unchecked, hide companyInfoCompleteSearch and show icd_name
+        $('#companyInfoCompleteSearch').hide();
+        $('#adx_organizationname').show();
+
+      } else {
+        $('#adx_organizationname').hide();
+        $('#companyInfoCompleteSearch').show();
+      }
+    });
+
+
+    // Trigger change event on page load to apply the initial state
+    $('#override_icdOrganisationName').trigger('change');
+
+    // Autopopulate account field  -------------------------------------------->
+    $("#companyInfoCompleteSearch").autocomplete({
+      source: function (request, response) {
+        if (request.term.length >= 3) {
+          $.ajax({
+            url: "/_api/accounts?$select=name,accountid",
+            type: "GET",
+            data: {
+              $filter: "contains(name,'" + request.term + "')",
+              $top: 5
+            },
+            success: function (data) {
+              var results = $.map(data.value, function (account) {
+                return {
+                  label: account.name,  // Displayed va lue in the suggestion list
+                  value: account.name,  // Value returned on selection
+                  accountData: account  // Store the entire account object for later use
+                };
+              });
+              response(results);
+            },
+            error: function () {
+              console.error("Error fetching accounts from API");
+            }
+          });
+        }
+      },
+      minLength: 3,
+      select: function (event, ui) {
+        // Access the selected account's data
+        var selectedAccount = ui.item.accountData;
+
+        // Autopopulate fields with the selected account's data
+        $("#icd_account").val(selectedAccount.accountid);
+        $("#adx_organizationname").val(selectedAccount.name);
+      }
+    });
+    var companyValue = $('#adx_organizationname').val();
+    if (companyValue !== "") {
+      $('#companyInfoCompleteSearch').val(companyValue); // Copy the value to the companyInfoCompleteSearch field
+    };
+    // Clear the #icd_account dropdown when #icd_name changes
+    $('#adx_organizationname').on('change input', function () {
+      $('#icd_account').val(''); // Clear the value of the dropdown
+    });
+
+    //End Autopopulate account field -------------------------------------------->
+
+
+
+  });
+
+  // Handle the click event for the Update button in the modal 
+  $('#updateEmailButton').on('click', function () {
+    const emailUpdated = $('#emailAddress').val(); // Get the email value
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(emailUpdated)) {
+      // Show an error message if the email is invalid
+      $('#emailHelp').text('Please enter a valid email address.').css('color', 'red');
+      return; // Exit the function if the email is invalid
+    }
+
+    $('#editEmailModal').modal('hide'); // Hide the modal on success 
+    showLoadingModal("Please wait... Saving your email");
+    // If the email is valid, proceed with the AJAX call 
+    var updatedEmailObj = { "emailaddress1": emailUpdated }
+    webapi.safeAjax({
+      type: 'PATCH',
+      contentType: 'application/json',
+      url: '/_api/contacts({{ user.id}})',
+      data: JSON.stringify(updatedEmailObj),
+      async: false,
+      success: function (response) {
+        // Show success message
+        hideLoadingModal()
+        showAlert('success', 'Email updated successfully!');
+        $('#emailHelp').text('');
+        location.reload(true);
+      },
+      error: function (error) {
+        // Show error message
+        hideLoadingModal()
+        showAlert('error', 'An error occurred while updating the email.');
+
+      }
+    });
+  });
+
+  function fnclearDelegateUser() {
+    showConfirmationModal(
+      "{{snippets['ICD/Profile/DelegateUser/Title/Text']}}",
+      "{{snippets['ICD/Profile/DelegateUser/Description/Text']}}",
+      "{{snippets['ICD/Profile/DelegateUser/Remove/Text']}}",
+      "{{snippets['ICD/Profile/DelegateUser/Cancel/Text']}}",
+      function () {
+        $('#icd_delegateuser_name').val(''); // Clears the input field
+        $('#icd_delegatefirstname').val(''); // Clears the input field
+        $('#icd_delegatelastname').val(''); // Clears the input field
+        $('#icd_email').val('');
+        showLoadingModal("Please wait... Removing your delegate user");
+        // If the email is valid, proceed with the AJAX call 
+        var clearDelegateObj = {
+          "icd_delegatefirstname": "",
+          "icd_delegatelastname": "",
+          "icd_email": "",
+          "icd_DelegateUser": null
+        };
+        // Enable and reset background color
+        $('#icd_delegatefirstname, #icd_delegatelastname, #icd_email')
+          .prop('disabled', false)
+          .each(function () {
+            $(this)
+              .attr('style', function (i, style) {
+                // Remove the specific background color style
+                return (style || '').replace(/background-color: #f2f2f2 !important;?/g, '');
+              });
+          });
+
+        webapi.safeAjax({
+          type: 'PATCH',
+          contentType: 'application/json',
+          url: '/_api/contacts({{ user.id}})',
+          data: JSON.stringify(clearDelegateObj),
+          async: true,
+          success: function (response) {
+            hideLoadingModal();
+            showAlert('success', 'Delegate user updated successfully!');
+            
+
+          },
+          error: function (error) {
+            hideLoadingModal();
+            showAlert('error', 'An error occurred while updating the email.');
+
+          }
+        });
+        // Add save logic here
+      },
+      function () {
+        console.log("Changes not saved");
+      }
+    );
+
+  }
+
+</script>
+<!-- Language POC -->
+
+<script>
+  /*
+    $(document).ready(function () {
+        // Retrieve the userLanguage from sessionStorage
+        var userLanguage = sessionStorage.getItem("userLanguage");
+
+        // If session is blank (userLanguage is null), update session variable and URL
+        if (!userLanguage) {
+            // Set the userLanguage from Liquid
+            userLanguage = "{{ userLanguage }}";
+
+            // Store the language preference in sessionStorage
+            sessionStorage.setItem("userLanguage", userLanguage);
+
+            // Get the current path from the URL
+            var currentPath = window.location.pathname;
+
+            // Define the pattern for language paths (e.g., /en-US/ or /fr-FR/)
+            var urlPattern = /^\/(en-US|fr-FR)(\/|$)/;
+
+            // If the URL contains a language path, replace it with the user's preferred language
+            if (urlPattern.test(currentPath)) {
+                var newPath = currentPath.replace(urlPattern, '/' + userLanguage + '/');
+                window.location.pathname = newPath; // Redirect to the updated path
+            } 
+            
+        }
+    });
+    */
+</script>
+
+<!-- Language POC -->
+
+<!-- Delegate user code -->
+{% if  membership_status == 100000000 or membership_status == 100000001 or membership_status == 100000004 or is_delegate_user == true %}
+
+<script>
+    $(window).on('load', function () {
+        $('fieldset[aria-label="Delegate User Information"]').hide();	
+    });
+</script>
+{% endif %}
+
+{% include 'Page Copy' %}
+{% editable snippets 'Profile/Header/Text'%}
+{% if is_delegate_user == true %}
+  {% entityform name: 'Portal - Delegate User Profile Page' %}
+{% else %}
+  {% entityform name: 'Portal - Profile Page' %}
+{% endif %}
+{% endblock %}

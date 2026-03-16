@@ -1,0 +1,102 @@
+{%assign entity_event="msevtmgt_event"%}
+{%assign event=entities[entity_event][request.params.eventid]%}
+
+<div class="event-details-container">
+
+        <h1>{{event.msevtmgt_name}}</h1>
+        
+ 
+        <div class="event-description">
+                <label>Description:</label>
+                <p>{{event.msevtmgt_description}}</p>
+            </div>
+
+        
+        <div class="event-details-info">
+            <div class="event-detail">
+                <label>Course Type:</label>
+                <p>{{event.msevtmgt_eventtype.label}}</p>
+            </div>
+            <div class="event-detail">
+                <label>Start Date & Time:</label>
+                <p>{{event.msevtmgt_eventstartdate}}</p>
+            </div>
+            <div class="event-detail">
+                <label>End Date & Time:</label>
+                <p>{{event.msevtmgt_eventenddate}}</p>
+            </div>
+            <div class="event-detail">
+                <label>City:</label>
+                <p>{{event.icd_city}}</p>
+            </div>
+           
+            
+        </div>
+{% fetchxml registeredEvent %}
+<fetch version="1.0" output-format="xml-platform" mapping="logical" distinct="false">
+  <entity name="icd_courseapplication">
+    <attribute name="icd_courseapplicationid" />
+    <attribute name="icd_name" />
+    <attribute name="createdon" />
+    <order attribute="icd_name" descending="false" />
+    <filter type="and">
+      <condition attribute="icd_contact" operator="eq" value="{{user.id}}" />
+      <condition attribute="icd_course" operator="eq" value="{{request.params.eventid}}" />
+    </filter>
+  </entity>
+</fetch>
+{% endfetchxml %}
+        {% if registeredEvent.results.entities.size > 0 %}
+
+        <div style="font-size: 20px; color: red; font-weight: bold;">
+            Thank you! You have already registered for this Course.
+        </div>
+
+        {% else %}
+            {% assign mysite = sitemarkers['Course Registration'].url | add_query: 'eventid', request.params.eventid %}
+          
+            <div>
+                <a href="{{mysite}}" style="display: inline-block; padding: 10px 20px; color: white; background-color: #002b54; text-decoration: none; border-radius: 5px;">Register here</a>
+            </div>
+        {% endif %}
+
+    </div>
+    
+
+<style>
+    .event-details-container {
+        margin: 20px auto;
+        max-width: 800px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: flex-start; 
+    }
+
+    .event-description {
+        flex: 1;
+        margin-right: 20px;
+    }
+
+    .event-details-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column; 
+    }
+
+    .event-detail {
+        margin-bottom: 20px;
+    }
+
+    .event-details-info .event-detail label {
+        font-weight: bold;
+    }
+
+    .event-details-info .event-detail p {
+        margin: 0;
+    }
+
+    .webform {
+        margin-top: auto; 
+    }
+</style>

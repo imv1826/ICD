@@ -1,0 +1,26 @@
+{% include 'ICD Helper - WebAPI Wrapper AJAX' %}
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 0px;">
+  <div class="container" style="padding: 0px; display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; margin-top: 60px; padding: 16px; ">
+      <h1>Mon Adhésion</h1>
+      <br>
+      <p>Pour afficher le type d'adhésion auquel vous êtes inscrit.</p>
+    </div>
+  </div>
+</div>
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="padding: 0px; display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; margin: 1em 0px; padding: 16px;"><h2 style="text-align: left;">Mon adhésion au conseil</h2></div>
+  </div>
+</div>
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="display: flex; flex-wrap: wrap;"><div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 0px;">{% include 'entity_list' key: 'My Board Membership' %}</div></div>
+</div>
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="padding: 0px; display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; margin: 1em 0px; padding: 16px;"><h2 style="text-align: left;">Mon adhésion individuelle</h2></div>
+  </div>
+</div>
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="display: flex; flex-wrap: wrap;"><div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 0px;">{% include 'entity_list' key: 'My Individual Memberships' %}</div></div>
+</div>

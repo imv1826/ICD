@@ -1,0 +1,438 @@
+{% assign zContact = entities['contact'][user.id] %}
+{% assign membership_status = zContact.icd_membershipstatus.value | default: null %}
+
+
+{% assign icdApplicationId = request.params['id'] %}
+{% fetchxml activeInvoices cache: "false"%}
+<fetch>
+  <entity name="invoice">
+    <attribute name="totalamount" />
+    <filter>
+      <condition attribute="statecode" operator="eq" value="0" />
+      <condition attribute="icd_application" operator="eq" value="{{ icdApplicationId }}" />
+      <condition attribute="createdon" operator="on-or-before" value="{{ now | date: 'o' }}" />
+    </filter>
+  </entity>
+</fetch>
+{% endfetchxml %}
+{% assign totalAmount = 0 %}
+{% for invoice in activeInvoices.results.entities %}
+    {% assign totalAmount = totalAmount | plus: invoice.totalamount %}
+{% endfor %}
+
+<script>
+	$(window).on('load', function () {
+ 
+		//#110389
+		$('#icd_account').closest('td').hide();
+        // Find the div with data-name="CompanyInformation "
+        var table = $('table[data-name="CompanyInformation"]');
+
+        // Find the table inside this div
+        //var table = div.find('table');
+
+        //  Create the  new row content
+        var newRow = `<tr>
+                    <td colspan="2" rowspan="1" class="clearfix cell text form-control-cell">
+                    <input type="text" name="companyInfoCompleteSearch" id="companyInfoCompleteSearch"
+                        class="text form-control mt-3" placeholder="{{ snippets["Application/AccountLookup/Typing"] }}"
+                        autocomplete="pca-override" aria-label="companyInfoCompleteSearch">
+                        <div class="help-block">
+                        <div>
+                            <label style="font-weight: normal;">
+                            <input onclick="" type="checkbox" id="override_icdCompanyName">
+                                {{ snippets["Application/AccountLookup/Checkbox"] }}
+                            </label>
+                        </div>
+                        </div>
+                    </td>
+                </tr>`;
+
+		// Prepend the new row to the table body
+		table.find('tbody').prepend(newRow);
+
+		//START code to grey our COMPANY field------------------------->
+		$('#override_icdCompanyName').on('change', function () {
+			const fieldsToHandle = [
+				'#icd_companyname'
+			];
+
+			if ($(this).is(':checked')) {
+				// ✅ Enable fields and remove grey background
+				fieldsToHandle.forEach(function (selector) {
+					const field = $(selector);
+					field.removeAttr('style'); // Clear inline styles first
+
+					if (field.is('select')) {
+						field.css('pointer-events', 'auto');
+					} else {
+						field.removeAttr('readonly');
+					}
+				});
+			} else {
+				// 🚫 Disable fields and apply grey background
+				fieldsToHandle.forEach(function (selector) {
+					const field = $(selector);
+
+					if (field.is('select')) {
+						// Prevent interaction, keep field submittable
+						field.css('pointer-events', 'none');
+					} else {
+						field.attr('readonly', 'readonly');
+					}
+
+					// Apply strict grey background
+					field.attr('style', function (_, style) {
+						return (style || '') + 'background-color: #f2f2f2 !important;';
+					});
+				});
+			}
+		});
+
+		// Trigger change event on page load to apply the initial state
+		$('#override_icdCompanyName').trigger('change');
+		//End code to grey our COMPANY field------------------------->
+
+		// Autopopulate account field  -------------------------------------------->
+		$("#companyInfoCompleteSearch").autocomplete({
+			source: function (request, response) {
+				if (request.term.length >= 3) {
+					$.ajax({
+						url: "/_api/accounts?$select=name,accountid",
+						type: "GET",
+						data: {
+							$filter: "contains(name,'" + request.term + "')",
+							$top: 5
+						},
+						success: function (data) {
+							var results = $.map(data.value, function (account) {
+								return {
+									label: account.name,  // Displayed va lue in the suggestion list
+									value: account.name,  // Value returned on selection
+									accountData: account  // Store the entire account object for later use
+								};
+							});
+							response(results);
+						},
+						error: function () {
+							console.error("Error fetching accounts from API");
+						}
+					});
+				}
+			},
+			minLength: 3,
+			select: function (event, ui) {
+				// Access the selected account's data
+				var selectedAccount = ui.item.accountData;
+
+				$("#icd_account").val(selectedAccount.accountid);
+				$("#icd_companyname").val(selectedAccount.name);
+			}
+		});
+		//End Autopopulate account field -------------------------------------------->
+	
+
+		$('#icd_companyname').on('input change', function() {
+		// Reset the #icd_account field to its default value
+		  $('#icd_account').val('');
+		});
+    });
+</script>
+
+
+{% if membership_status != 100000000 %}
+<script>
+    $(document).ready(function () {
+
+        // Check the checkbox with id "icd_codeofconduct"
+        $('#icd_codeofconduct').prop('checked', true);
+
+        // Hide the parent table row of the checkbox
+        $('#icd_codeofconduct').closest('tr').hide();
+    });
+</script>
+{% endif %}
+
+<script>
+    $(window).on('load', function () {
+ 
+        $('#icd_firstname, #icd_lastname').each(function () {
+            $(this)
+                .attr('style', function (i, style) {
+                    return (style || '') + 'background-color: #f2f2f2 !important;';
+                })
+                .attr('title', 'To change your data, please contact ICD support.');
+        });
+
+    //Additional Details field  Tooltip-------------------------------------------->
+      $('#icd_businessacumen, #icd_directorexperience, #icd_motivation, #icd_other').attr('title', 'Character limit of 3000');
+
+      
+    });
+</script>
+
+
+<script>
+
+    $(window).on('load', function () {
+
+        const $button = $(".add-file.btn.btn-primary.action");
+
+		if ($button.length) {
+		  // Force text color to white
+		  $button.attr("style", ($button.attr("style") || "") + "color: white !important;");
+
+		  // Force icon color to white
+		  $button.find("svg, i").each(function() {
+			const existingStyle = $(this).attr("style") || "";
+			$(this).attr("style", existingStyle + "color: white !important; fill: white !important;");
+		  });
+		}
+		
+        $('#icd_reference1account').closest('td').hide();
+        var divRefOrgCheckbox = `
+        <input type="text" name="reference1accountCompleteSearch" id="reference1accountCompleteSearch"
+            class="text form-control" placeholder="Start typing to search your company..."
+            autocomplete="pca-override">
+        <div class="help-block">
+            <div>
+                <label style="font-weight: normal;">
+                    <input onclick="" type="checkbox" id="override_reference1accountCompleteSearch">
+                    Cannot find company? Click checkbox to manually enter company name.
+                </label>
+            </div>
+        </div>`;
+        $('#icd_reference2account').closest('td').hide();
+        var divRefOrgCheckbox2 = `
+        <input type="text" name="reference2accountCompleteSearch" id="reference2accountCompleteSearch"
+            class="text form-control" placeholder="Start typing to search your company..."
+            autocomplete="pca-override">
+        <div class="help-block">
+            <div>
+                <label style="font-weight: normal;">
+                    <input onclick="" type="checkbox" id="override_reference2accountCompleteSearch">
+                    Cannot find company? Click checkbox to manually enter company name.
+                </label>
+            </div>
+        </div>`;
+
+        // Find the parent td of the input with id "icd_name" and append the new HTML
+        var parentTd1 = $('#icd_reference1organization').closest('td');
+        parentTd1.append(divRefOrgCheckbox);
+        var parentTd2 = $('#icd_reference2organization').closest('td');
+        parentTd2.append(divRefOrgCheckbox2);
+
+        $('#override_reference1accountCompleteSearch').on('change', function () {
+            if ($(this).is(':checked')) {
+                // If the checkbox is checked, hide icd_name and show reference1accountCompleteSearch
+                // If the checkbox is unchecked, hide reference1accountCompleteSearch and show icd_name
+                $('#reference1accountCompleteSearch').hide();
+                $('#icd_reference1organization').show();
+
+            } else {
+                $('#icd_reference1organization').hide();
+                $('#reference1accountCompleteSearch').show();
+            }
+        });
+        $('#override_reference2accountCompleteSearch').on('change', function () {
+            if ($(this).is(':checked')) {
+                // If the checkbox is checked, hide icd_name and show reference1accountCompleteSearch
+                // If the checkbox is unchecked, hide reference1accountCompleteSearch and show icd_name
+                $('#reference2accountCompleteSearch').hide();
+                $('#icd_reference2organization').show();
+
+            } else {
+                $('#icd_reference2organization').hide();
+                $('#reference2accountCompleteSearch').show();
+            }
+        });
+        // Trigger change event on page load to apply the initial state
+        $('#override_reference1accountCompleteSearch').trigger('change');
+        $('#override_reference2accountCompleteSearch').trigger('change');
+
+        // Autopopulate account field  -------------------------------------------->
+        $("#reference1accountCompleteSearch").autocomplete({
+            source: function (request, response) {
+                if (request.term.length >= 3) {
+                    $.ajax({
+                        url: "/_api/accounts?$select=name,accountid",
+                        type: "GET",
+                        data: {
+                            $filter: "contains(name,'" + request.term + "')",
+                            $top: 5
+                        },
+                        success: function (data) {
+                            var results = $.map(data.value, function (account) {
+                                return {
+                                    label: account.name,  // Displayed va lue in the suggestion list
+                                    value: account.name,  // Value returned on selection
+                                    accountData: account  // Store the entire account object for later use
+                                };
+                            });
+                            response(results);
+                        },
+                        error: function () {
+                            console.error("Error fetching accounts from API");
+                        }
+                    });
+                }
+            },
+            minLength: 3,
+            select: function (event, ui) {
+                // Access the selected account's data
+                var selectedAccount = ui.item.accountData;
+
+                // Autopopulate fields with the selected account's data
+                $("#icd_reference1account").val(selectedAccount.accountid);
+                $("#icd_reference1organization").val(selectedAccount.name);
+            }
+        });
+        var companyValue = $('#icd_reference1organization').val();
+        if (companyValue !== "") {
+            $('#reference1accountCompleteSearch').val(companyValue); // Copy the value to the reference1accountCompleteSearch field
+        };
+        // Clear the #icd_account dropdown when #icd_name changes
+        $('#icd_reference1organization').on('change input', function () {
+            $('#icd_reference1account').val(''); // Clear the value of the dropdown
+        });
+
+        //End Autopopulate account field -------------------------------------------->
+        // Autopopulate account field  -------------------------------------------->
+        $("#reference2accountCompleteSearch").autocomplete({
+            source: function (request, response) {
+                if (request.term.length >= 3) {
+                    $.ajax({
+                        url: "/_api/accounts?$select=name,accountid",
+                        type: "GET",
+                        data: {
+                            $filter: "contains(name,'" + request.term + "')",
+                            $top: 5
+                        },
+                        success: function (data) {
+                            var results = $.map(data.value, function (account) {
+                                return {
+                                    label: account.name,  // Displayed va lue in the suggestion list
+                                    value: account.name,  // Value returned on selection
+                                    accountData: account  // Store the entire account object for later use
+                                };
+                            });
+                            response(results);
+                        },
+                        error: function () {
+                            console.error("Error fetching accounts from API");
+                        }
+                    });
+                }
+            },
+            minLength: 3,
+            select: function (event, ui) {
+                // Access the selected account's data
+                var selectedAccount = ui.item.accountData;
+
+                // Autopopulate fields with the selected account's data
+                $("#icd_reference2account").val(selectedAccount.accountid);
+                $("#icd_reference2organization").val(selectedAccount.name);
+            }
+        });
+        var companyValue = $('#icd_reference2organization').val();
+        if (companyValue !== "") {
+            $('#reference2accountCompleteSearch').val(companyValue); // Copy the value to the reference2accountCompleteSearch field
+        };
+        // Clear the #icd_account dropdown when #icd_name changes
+        $('#icd_reference2organization').on('change input', function () {
+            $('#icd_reference2account').val(''); // Clear the value of the dropdown
+        });
+
+        //End Autopopulate account field -------------------------------------------->
+
+
+        // Professional Membership and board memberhsip                
+        var count = 0;
+
+        // Define the configuration for observing changes
+        var config = { childList: true, subtree: true };
+
+        // Callback function to execute when mutations are observed
+        var callback = function(mutationsList, observer) {
+            mutationsList.forEach(function(mutation) {
+                if (mutation.type === 'childList') {
+                    count++;
+
+                    // Find closest ancestor with class 'subgrid' and an ID
+                    var subgridElement = mutation.target.closest('.subgrid');
+                    var targetId = subgridElement ? subgridElement.id : null;
+
+                    checkSubgrids();
+
+                    console.log("Mutation count:", count);
+                }
+            });
+
+        };
+
+        // Create a single MutationObserver instance
+        var observer = new MutationObserver(callback);
+
+        // Observe both nodes
+        var professionalNode = document.getElementById("ProfessionalExperience");
+        var boardNode = document.getElementById("BoardExperience");
+
+        if (professionalNode) {
+            observer.observe(professionalNode, config);
+        } else {
+            console.warn("Element with ID 'ProfessionalExperience' not found.");
+        }
+
+        if (boardNode) {
+            observer.observe(boardNode, config);
+        } else {
+            console.warn("Element with ID 'BoardExperience' not found.");
+        }
+
+
+
+        function checkSubgrids() {
+            var disableButtons = false;
+
+            // Check for ProfessionalExperience subgrid
+            var $professionalSubgrid = $('#ProfessionalExperience.subgrid');
+            if ($professionalSubgrid.length) {
+                var $emptyMessage = $professionalSubgrid.find('.view-empty.message');
+                if ($emptyMessage.length && $emptyMessage.is(':visible')) {
+                    console.log('The ProfessionalExperience subgrid exists, and the view-empty message is visible.');
+                    disableButtons = true; // Disable buttons if the message is visible
+                } else if ($emptyMessage.length && !$emptyMessage.is(':visible')) {
+                    console.log('The ProfessionalExperience subgrid exists, but the view-empty message is hidden.');
+                } else {
+                    console.log('The ProfessionalExperience subgrid exists, and no view-empty message is present.');
+                }
+            } else {
+                console.log('ProfessionalExperience subgrid does not exist.');
+            }
+
+            // Check for BoardExperience subgrid
+            var $boardSubgrid = $('#BoardExperience.subgrid');
+            if ($boardSubgrid.length) {
+                var $emptyMessage = $boardSubgrid.find('.view-empty.message');
+                if ($emptyMessage.length && $emptyMessage.is(':visible')) {
+                    console.log('The BoardExperience subgrid exists, and the view-empty message is visible.');
+                    disableButtons = true; // Disable buttons if the message is visible
+                } else if ($emptyMessage.length && !$emptyMessage.is(':visible')) {
+                    console.log('The BoardExperience subgrid exists, but the view-empty message is hidden.');
+                } else {
+                    console.log('The BoardExperience subgrid exists, and no view-empty message is present.');
+                }
+            } else {
+                console.log('BoardExperience subgrid does not exist.');
+            }
+
+            // Disable or enable the buttons based on the condition
+            if (disableButtons) {
+                $('#NextButton, #saveDraft').prop('disabled', true);
+            } else {
+                $('#NextButton, #saveDraft').prop('disabled', false);
+            }
+        }
+    });
+
+</script>

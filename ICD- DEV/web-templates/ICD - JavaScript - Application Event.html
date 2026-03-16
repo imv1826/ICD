@@ -1,0 +1,514 @@
+{% include 'ICD - Modal'%}
+
+{% assign AppID = application.id | default: "" %}
+{% assign eventId = application.icd_registrationfor.id | default: "" %}
+{% assign event = entities['msevtmgt_event'][eventId] %}
+{% assign enabledEventWaitlist = event.icd_waitinglist | default: false%}
+
+
+    {% fetchxml EventTableCounts %}
+        <fetch top="1000">
+            <entity name="icd_eventtable">
+            <attribute name="icd_eventtableid" />
+            <filter>
+                <condition attribute="icd_msevtmgt_event" operator="eq" value="{{eventId}}" />
+                <condition attribute="statecode" operator="eq" value="0" />
+            </filter>
+            </entity>
+        </fetch>
+    {% endfetchxml %}
+{% assign EventTableCounts = EventTableCounts.results.entities.size | default: 0 %}
+{% assign maxCapacity = event.msevtmgt_maximumeventcapacity | default: 0 %}
+{% assign currentRegistrations = event.msevtmgt_registrationcount | default: 0 %}
+{% assign tableSize = event.icd_individualtable | default: 0 %}
+{% assign tableAvailable = event.icd_eventtable | default: 0 %}
+{%- assign remainingTableCapacity = tableAvailable | minus: EventTableCounts  | default: 0 -%}
+{%- assign tableOccupancyAvailable = tableSize | times: remainingTableCapacity -%}
+{% assign usedSpots = currentRegistrations | plus: tableOccupancyAvailable %}
+{% assign current_date = now | date: 'yyyyMMddHHmm' %}
+
+{% assign maxEventpurchasequantity = maxCapacity | minus: currentRegistrations %}
+
+{% assign totalTicketsPurchased = application.icd_numberoftickets | default: 0 %}
+{% assign individualTicket = application.icd_eventpurchasequantity | default: 0 %}
+{% assign WaitlistApplication = application.icd_waitinglist | default: "" %}
+{% assign currentContactRec = entities['contact'][user.id] %}
+{% assign numtablePurchased = application.icd_eventnumbertable | default: 0 %}
+
+
+
+{% comment %} Step 2 code {% endcomment %}
+
+
+    
+
+    {% fetchxml galaTablePrices %}
+        <fetch top="50">
+            <entity name="productpricelevel">
+            <attribute name="amount" />
+            <attribute name="icd_regularprice" />
+            <attribute name="icd_lateprice" />
+            <filter>
+                <condition attribute="productid" operator="eq" value="{{event.icd_tableproduct.id}}"/>
+            </filter>
+            <link-entity name="pricelevel" from="pricelevelid" to="pricelevelid" link-type="inner">
+                <attribute name="icd_type" />
+                <attribute name="name" />
+                <attribute name="pricelevelid" />
+                <filter>
+                <condition attribute="icd_type" operator="contain-values">
+                    <value>{{ currentContactRec.icd_membershipstatus.value }}</value>
+                </condition>
+                </filter>
+            </link-entity>
+            </entity>
+        </fetch>
+
+    {% endfetchxml %}
+
+
+<script>
+    sessionStorage.setItem('AppID', "{{ AppID }}");
+    sessionStorage.setItem('userId', "{{user.id}}");
+    sessionStorage.setItem('numtablePurchased', "{{ numtablePurchased }}");
+    console.log('sessionStorage value:', sessionStorage.getItem('numtablePurchased'));
+
+    var alertShown = false;
+
+  // Function to sum the values of the two fields and display the result in icd_numberoftickets
+  function calculateTotalTickets() {
+      // Get the values of the two fields using jQuery
+      var purchaseQuantity = $("#icd_eventpurchasequantity").val();
+      var numberTable = $("#icd_eventnumbertable").val();
+
+      // Convert the values to numbers (if they are numeric)
+      var qty = parseFloat(purchaseQuantity);
+      var table = parseFloat(numberTable);
+
+      // If one field is empty, set it to 0 for calculation purposes
+      if (isNaN(qty)) {
+          qty = 0; // If purchaseQuantity is not a number, treat it as 0
+      }
+      if (isNaN(table)) {
+          table = 0; // If numberTable is not a number, treat it as 0
+      }
+
+      // Multiply the number of tables by 10
+      table *= {{tableSize}};
+
+      // Calculate the sum of the two fields (purchaseQuantity + modified numberTable)
+      var totalTickets = qty + table;
+      if(totalTickets > {{maxEventpurchasequantity }}){
+        $("#icd_eventpurchasequantity").val(0);
+        $("#icd_numberoftickets").val(0);
+        $("#icd_eventnumbertable").val(0);
+        showAlert('info', 'The maximum number of ticket is: {{ maxEventpurchasequantity }}');
+      }else{
+        // Display the result in the icd_numberoftickets field
+      $("#icd_numberoftickets").val(totalTickets);
+    
+    }
+
+
+      // Check if purchaseQuantity is greater than 9 and display alert
+      if (qty > 9 && !alertShown) {
+          showAlert('info', 'It is recommended to buy tables when number of individual tickets is greater than 10');
+          alertShown = true;
+      }
+      checkConditions();
+
+  
+  }
+  function checkConditions() {
+    var enabledWaitlists = $('icd_waitinglist').prop('checked'); 
+    //console.log(`Is waitlist enabled: ${enabledWaitlists}`);
+      var ticketsValue = parseInt($('#icd_numberoftickets').val(), 10);
+      if (isNaN(ticketsValue)) {
+          ticketsValue = 0; // Default to 0 if the value is invalid
+      }
+      
+
+
+      if (ticketsValue < 1 && $("#icd_eventpurchasequantity").length > 0) {
+          $('#NextButton').prop('disabled', true);
+      } 
+      else {
+          $('#NextButton').prop('disabled', false);
+      }
+  }
+
+    
+    function handleMaxValue(inputId, maxValue, alertMessage) {
+ 
+        console.log("the max value is :", maxValue);
+        var value = parseInt($(inputId).val(), 10);
+        if (isNaN(value)) {
+            value = 0; // Default to 0 if invalid
+            calculateTotalTickets();
+        }
+
+
+        console.log("before condition",{{application.icd_waitinglist }});
+        {% if application.icd_waitinglist == false and enabledEventWaitlist %}
+            console.log("in if condition");
+            if (value > maxValue) {
+                $(inputId).val(maxValue); // Set field value to the maximum
+                showConfirmationModal(
+                    "Limited Ticket Availability",
+                    alertMessage.replace('{maxValue}', maxValue),
+                    
+                    "Join Waitlist",
+                    "Cancel",
+                    function() { // Redirect user to the application form
+                        window.location.href = "{{ sitemarkers['Application'].url | escape }}?formType=fbf3ae1f-88dd-ef11-a730-6045bdf9be70&eventId={{eventId}}"; 
+                    }
+                );
+            }
+        {% else %}   
+            console.log("in else condition");         
+            if (value > maxValue) {
+                showAlert('info', alertMessage.replace('{maxValue}', maxValue));
+                $(inputId).val(maxValue); // Set field value to the maximum
+                calculateTotalTickets();
+            }
+        {% endif %}
+     
+
+    }
+
+
+
+    function convertToEnglishAmount(amount) {
+        // Convert amount to a float first
+        let numericAmount = parseFloat(amount);
+
+        if (isNaN(numericAmount)) {
+            return "Invalid amount"; // Handle invalid cases
+        }
+
+        // Format the number in English format (thousands separators and dot for decimals)
+        return numericAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    }
+
+
+    ////////Step 3 code collecting the signed in user info
+
+
+    var userInfo = {
+        id:"{{ appContact.id | default: '' | escape }}",
+        firstname: "{{ appContact.firstname | default: '' | escape }}",
+        lastname: "{{ appContact.lastname | default: '' | escape }}",
+        email: "{{ appContact.emailaddress1 | default: '' | escape }}",
+        dietaryRestrictions: "{{ appContact.icd_dietaryrestrictions | default: '' | escape }}",
+        title: "{{ application.icd_jobtitle | default: '' | escape }}",
+        informalName: "{{ application.icd_informalname | default: '' | escape }}",
+        accessibility: "{{ application.icd_accessibilityneedsnew | default: '' | escape }}"
+    };
+
+    // Store in sessionStorage
+    sessionStorage.setItem("userInfo", JSON.stringify(userInfo));
+
+    //console.log("User Info stored in sessionStorage:", userInfo);
+
+
+  // jQuery event listeners for the fields to trigger the function when either field loses focus
+  $(window).on('load', function () {
+
+      var tableSize = {{tableSize}};
+      var tableQty = {{remainingTableCapacity}};
+      var maxEventpurchasequantity = {{maxEventpurchasequantity}};
+      var totalTicketsPurchased = {{totalTicketsPurchased}};
+      var current_date = '{{current_date}}';
+
+      console.log("Current date:", current_date);
+      console.log("tableSize:", tableSize);
+      console.log("maxEventpurchasequantity:", maxEventpurchasequantity);
+      sessionStorage.setItem('deliveryMethod', {{event.icd_deliverymethod.value}});
+
+      const deliveryMethod = sessionStorage.getItem('deliveryMethod');
+      var individualTicket ={{individualTicket}};
+     // sessionStorage.setItem('waitlistEnabled', {{application.icd_waitinglist.value}});
+     // const waitlistEnabled = sessionStorage.getItem('waitlistEnabled');
+     var waitlistEnabled = "{{ application.icd_waitinglist | default: 'false' }}";
+      
+      // Print to Console
+      //console.log("Waitlist Enabled Value:", waitlistEnabled);
+      var tablePrice = 0;
+
+      if( {{galaTablePrices.results.entities.size}} > 0){
+          {% for galaTablePrice in galaTablePrices.results.entities %}
+              var tablePrice = convertToEnglishAmount({{galaTablePrice.amount}});
+          {% endfor %}
+      }
+
+    // Find the label inside the same <tr> and append 
+        $("#icd_eventnumbertable_label").append(" ({{tablesize }} {{ snippets['Application/Conference/GuestPerTable'] }})")
+        .closest("td") // Move up to the parent <td>
+        .find(".description.above") // Find the description inside the same <td>
+        .prepend(tablePrice);
+
+     /* if (waitlistEnabled === "true") { 
+            $("#icd_eventnumbertable").prop("readonly", true);
+        } */
+      {% if application.icd_waitinglist == true %} 
+      const fields = ["#icd_eventpurchasequantity", "#icd_eventnumbertable"];
+      
+      $("#icd_eventpurchasequantity, #icd_eventnumbertable")
+                .prop("readonly", true) // Make field read-only
+                .each(function () {
+                        $(this).attr('style', function (i, style) {
+                          return (style || '') + 'background-color: #f2f2f2 !important;';
+                      });
+                  });
+      {%endif%}
+
+      //When event is online
+      {% if event.icd_deliverymethod.value == 100000001 %}
+          $("#icd_dietaryrestrictions").closest('td').hide();
+      {%endif%}
+
+
+    var isTableRequired = {{ event.icd_istablerequired  | default: 'false'}};
+
+    function toggleTableManagerFields() {
+        var eventNumber = parseInt($("#icd_eventnumbertable").val());
+
+        //console.log("Checking event number:", eventNumber);
+        //console.log("Is table required:", isTableRequired);
+
+        // Only show if event number >= 1 AND table is required
+        if (isNaN(eventNumber) || eventNumber < 1 || isTableRequired === false) {
+            //console.log("Hiding table manager fields.");
+            $("#icd_tablemanagername, #icd_tablemanageremail, #icd_tablemanagerlastname").closest("tr").hide();
+        } else {
+            //console.log("Showing table manager fields.");
+            $("#icd_tablemanagername, #icd_tablemanageremail, #icd_tablemanagerlastname").closest("tr").show();
+        }
+    }
+
+    // Initial run
+    toggleTableManagerFields();
+
+    // Run whenever the input value changes
+    $("#icd_eventnumbertable").on("input change", function () {
+        toggleTableManagerFields();
+    });
+
+    function toggleNextButton() {
+        var emailField = $("#icd_tablemanageremail");
+        if (emailField.length > 0) {  // Check if field exists
+            emailField.prop('required', true);  // Add the "required" class
+            emailField.closest(".control").prev().addClass("required");
+            if (emailField.val() === "") {
+                $("#NextButton").prop("disabled", true);  // Disable the button
+            } else {
+                    $("#NextButton").prop("disabled", false);  // Enable the button
+            }
+        }
+    }
+
+    // Call the function initially to set the button state and field appearance
+    toggleNextButton();
+
+    // // Attach the function to the input field's keyup event to check as the user types
+    $("#icd_tablemanageremail").on('keyup', function() {
+        toggleNextButton();
+    });
+
+    //   //When event table is null or 0
+    {% if event.icd_eventtable == null or event.icd_eventtable == 0 or event.icd_istablerequired == false %}
+        $("#icd_eventnumbertable,#icd_tablemanagername, #icd_tablemanageremail, #icd_tablemanagerlastname").closest('td').hide()
+    {%endif%}
+
+    //   function toggleNextButton() {
+    //     var emailField = $("#icd_tablemanageremail");
+    //     if (emailField.length > 0) {  // Check if field exists
+    //         emailField.prop('required', true);  // Add the "required" class
+    //         emailField.closest(".control").prev().addClass("required");
+    //         if (emailField.val() === "") {
+    //             $("#NextButton").prop("disabled", true);  // Disable the button
+    //         } else {
+    //                 $("#NextButton").prop("disabled", false);  // Enable the button
+    //         }
+    //     }
+    //     }
+
+    // // Call the function initially to set the button state and field appearance
+    // toggleNextButton();
+
+    // // // Attach the function to the input field's keyup event to check as the user types
+    // $("#icd_tablemanageremail").on('keyup', function() {
+    //     toggleNextButton();
+    // });
+
+            if ($('#icd_numberoftickets').length) {
+    $('#icd_numberoftickets').hide();
+    console.log('Field hidden successfully');
+} else {
+    console.log('Field icd_numberoftickets not found');
+}
+        // Set default values to 0 only if the fields are empty or null
+        if ($("#icd_eventpurchasequantity").val() === "" || $("#icd_eventpurchasequantity").val() === null) {
+            $("#icd_eventpurchasequantity").val(0);
+        }
+        if ($("#icd_eventnumbertable").val() === "" || $("#icd_eventnumbertable").val() === null) {
+            $("#icd_eventnumbertable").val(0);
+        }
+        if ($("#icd_numberoftickets").val() === "" || $("#icd_numberoftickets").val() === null) {
+            $("#icd_numberoftickets").val(0);
+        }
+
+         
+
+
+      // Check conditions when the page loads
+      checkConditions();
+      //handleMaxValue("#icd_eventpurchasequantity", maxEventpurchasequantity, "The event has a maximum of {maxValue} ticket(s) remaining. Please enter a lower quantity to proceed.");
+      handleMaxValue("#icd_eventnumbertable", tableQty, "The event has a maximum of {maxValue} table(s) remaining. Please enter a lower quantity to proceed.");
+      
+
+      // Make icd_numberoftickets read-only (non-editable by user)
+      //$("#icd_numberoftickets").prop("readonly", true);
+
+        //gray out 
+        $('#icd_numberoftickets').each(function () {
+            $(this).attr('style', function (i, style) {
+                return (style || '') + 'background-color: #f2f2f2 !important;';
+            });
+        });
+
+      // Handle blur event for icd_eventpurchasequantity
+      $("#icd_eventpurchasequantity").on("blur", function() {
+          calculateTotalTickets(); // Recalculate total after enforcing max value
+          //handleMaxValue("#icd_eventpurchasequantity", maxEventpurchasequantity, "The limit for event purchase quantity is {maxValue}.");
+      });
+
+      $("#icd_eventnumbertable").on("blur", function() {        
+          calculateTotalTickets(); // Recalculate total after enforcing max value
+          handleMaxValue("#icd_eventnumbertable", tableQty, "The limit for event number table is {maxValue}.");
+      });
+
+
+
+  /*
+  <------------Validate number of Guest-------------------->
+  */
+
+
+    function chknumberOfGuess() {
+      //console.log("ajax started");
+      $.ajax({
+          url: "/_api/icd_guests?$count=true&$filter=_icd_application_value eq {{AppID}} &$select=icd_guestid",
+          type: "GET",
+          cache: true,  // Enable caching
+          async: false,
+          success: function (data) {
+              numberOfGuess = data['@odata.count'];
+              //console.log(numberOfGuess);
+
+          },
+          error: function () {
+              console.error("Error fetching accounts from API");
+          }
+      });
+
+      //console.log("record count started");
+        if (numberOfGuess < individualTicket) {
+            $('#NextButton, #saveDraft').prop('disabled', true);
+            $(".btn.create-action").show();        
+        }
+        else if (numberOfGuess === totalTicketsPurchased ) {
+            $('#NextButton, #saveDraft').prop('disabled', false);
+            showAlert('info', "{{ snippets['Application/Event/MaxGuestLimit'] }}");
+            $(".btn.create-action").hide();
+        } else if (numberOfGuess > totalTicketsPurchased) {
+            $('#NextButton, #saveDraft').prop('disabled', true);
+            $(".btn.create-action").hide();
+
+        } else {
+            $('#NextButton, #saveDraft').prop('disabled', false);
+            $(".btn.create-action").show();
+        }
+
+    }
+
+    if ($('#Guest').length) {
+        chknumberOfGuess();           
+    };
+    // End Check if the #Guest div exists   -------------------------------------------->
+
+
+    var count = 0;
+
+    var targetNode = document.getElementById('Guest');
+
+    // Define the configuration for observing  changes (e.g., childList for changes in child elements)
+        var config = { childList: true, subtree: true };
+
+        // Callback function to execute when mutations are observed
+        var callback = function (mutationsList, observer) {
+            // Loop through the mutations to detect any changes
+            mutationsList.forEach(function (mutation) {
+                if (mutation.type === 'childList') {
+                    // Check if the mutation is related to the "create-action" link, and skip it
+                    if (mutation.target && mutation.target.tagName === 'A' && mutation.target.classList.contains('create-action')) {
+                        return; // Skip this mutation
+                    }
+
+                    // Increment count and check number of guesses
+                    count = count + 1;
+                    chknumberOfGuess();
+                    //console.log(count);
+                }
+            });
+        };
+
+    // Create a new MutationObserver instance and pass in the callback
+    var observer = new MutationObserver(callback);
+
+    // Start observing the target node for configured mutations
+    if (targetNode) {
+      observer.observe(targetNode, config);
+    }
+
+//add help-text for attendee in step 3
+     // Check if the table with data-name="atendeesSection" exists
+        if ($('table[data-name="atendeesSection"]').length) {
+
+            let attendeeMessage = `{{ snippets['Application/Event/AttendeeDetail'] }}`;
+            let attendeeMessages = `{{ snippets['Application/Event/AttendeeDetails'] }}`;
+        
+            // Find the "Create" button and append the help text
+            // Check if the button exists before appending the help text
+            let createButton = $('.create-action');
+
+            if (createButton.length) {
+
+                $('<h5></h5>').text(attendeeMessage).css({
+                    "margin-bottom": "10px",  // Adds spacing below the first <h5>
+                    "padding": "5px 5px"        // Optional padding
+                }).insertBefore(createButton.parent().parent());
+
+                $('<h5></h5>').text(attendeeMessages).css({
+                    "margin-bottom": "10px",
+                    "padding": "5px 5px"
+                }).insertBefore(createButton.parent().parent());
+            }           
+                        
+        }
+//Change abondon button text 
+         if ($('#abandonApplicaiton').length) {
+        // Change the button text to 'Abandon Registration'
+        $('#abandonApplicaiton').text("{{ snippets['Application/Conference/AbandonRegistrationBtn'] }}");
+    }
+
+     if ($('#saveDraft').length) {
+        // Change the Save Draft button text to 'Save Draft And Exit'
+        $('#saveDraft').text("{{ snippets['Application/Conference/SaveDraftExitBtn'] }}");
+    }
+
+
+
+  });
+
+</script>

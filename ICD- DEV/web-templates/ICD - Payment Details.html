@@ -1,0 +1,540 @@
+{% block main %}
+
+{% include 'ICD Helper - WebAPI Wrapper AJAX' %}
+{% assign appID = request.params["id"] | default: appIDParam %}
+
+{% assign application = entities['icd_application'][appID] | default: ""  %}
+          
+{% assign applicationType = application.icd_apptype.id %}
+
+
+{% assign AppTypeEntity = entities.icd_applicationtype[applicationType] | default: ""  %}
+{% assign enURL = AppTypeEntity.icd_urlenglish | default: "https://icd.ca" %}
+{% assign frURL = AppTypeEntity.icd_urlfrench  | default: "https://ias.ca"%}
+<script>
+    // Get the current page URL
+    const currentURL = window.location.href;
+    // Determine redirection URL based on language in the URL
+    const targetURL = currentURL.includes("fr-Fr") ? "{{ frURL }}" : "{{ enURL }}";
+    console.log("targetURL: ", targetURL);
+    // Set it on page load
+    $(document).ready(function () {
+        $('#finishBtn').attr('href', targetURL);
+    });
+</script>
+
+{% assign appPaymentmethod = application.icd_paymentmethod.value %}
+
+{% assign appPaymentamount = application.icd_paymentamount %}
+
+{% assign applicationPO = application.icd_purchaseorderno %}
+
+{% assign applicationBillTo = application.icd_billtostateorprovince %}
+
+{% include 'ICD - Invoice - Fetchxml' appID : appID %}
+
+{% if queryInvoiceDetails.results.entities.size > 0 %}
+    {% assign results = queryInvoiceDetails.results.entities.first %}
+    {% assign invoiceCount = queryInvoice.results.entities.size %}
+    {% assign firstInvoice = queryInvoice.results.entities.first %}
+    {% if request.path contains "fr-Fr" %}
+
+        <div class="back-to-application">
+            <p class="mt-4" ><button class="btn-primary"  onclick="window.location.href='/fr-Fr/Application-Form/?id={{ appID }}'"><i class="fa fa-arrow-left" aria-hidden="true"></i></button></p>
+        </div>
+        <div class="container invoice-container">
+            <header class="container invoice-header">
+                <div>
+                    <img src="/ICD- Logo.png" alt="ICD Logo" class="icdinvoicelogo">
+                </div>
+                <div class="invoice-details">
+                    <h1>Facture</h1>
+            </div>
+            </header>
+            <div class="company-invoice-details">
+                <div class="company-address">
+                    <p>1601-250 Yonge Street</p>
+                    <p>Toronto, ON M5B 2L7</p>
+                </div>
+                <div class="invoice-number">
+                    <p>Facture No: <strong>{{ results["aa.invoicenumber"] }}</strong></p>
+                </div>
+            </div>
+
+            
+            <section class="invoice-address">
+                <div class="address-label">
+                    <h3>Vendu à:</h3>
+                </div>
+                <div class="address-content">
+                <p>{{ application.icd_firstname }} {{ application.icd_lastname }}<br/>
+                {{ application.icd_line1 }}<br/>
+                {% if application.icd_line2 %}
+                    {{ application.icd_line2 }}<br/>
+                {%endif%}
+                {{ application.icd_city }}<br/>
+                {{ application.icd_stateorprovince }}<br/>
+                {{ application.icd_country }} {{ application.icd_postalcode }}
+                </p>
+                </div>
+                <div class="address-label">
+                    <h3>Facturer à:</h3>
+                </div>
+                <div class="address-content">
+                    {% if applicationBillTo %}
+                        <p>{{application.icd_billto }}<br/>
+                            {{ application.icd_billtoline1 }}<br/>
+                            {% if application.icd_billtoline2 %}
+                                {{ application.icd_billtoline2 }}<br/>
+                            {%endif%}
+                            {{ application.icd_billtocity }}<br/>
+                            {{ application.icd_billtostateorprovince }}<br/>
+                            {{ application.icd_billtocountry }} {{ application.icd_billtopostalcode }}
+                            </p>
+                    {% else %}
+                        {% if contactDetails.results.entities.size > 0 %}
+                            {% assign conResults = contactDetails.results.entities.first %}
+                            <p>{{ conResults["customerid"].name }}<br/>
+                            {{ conResults["invContact.address1_line1"] }}<br/>
+                            {% if conResults["invContact.address1_line2"] %}
+                                {{ conResults["invContact.address1_line2"] }}<br/>
+                            {%endif%}
+                            {{ conResults["invContact.address1_city"] }}<br/>
+                            {{ conResults["invContact.address1_stateorprovince"] }}<br/>
+                            {{ conResults["invContact.address1_country"] }} {{ conResults["invContact.address1_postalcode"] }}
+                            </p>
+                        {% endif %}
+                    {% endif %}
+                    </p>
+                </div>                    
+            </section>
+
+            <section class="invoice-metadata">
+                <table class="metadata-table">
+                    <tr>
+                        <th>Numéro de commande</th>
+                        <th>Date de commande</th>
+                        <th>Conditions</th>
+                        <th>Date de facture</th>
+                    </tr>
+                    <tr>
+                        {%if results["aa.icd_purchaseorderno"] %}
+                            <td>{{ results["aa.icd_purchaseorderno"]}}</td>
+                        {% else %}
+                            <td>{{ applicationPO | default: "N/A" }}</td>
+                        {%endif%}
+                        <td>{{ results["aa.createdon"] | date: "dd-MM-yyyy" }}</td>
+                        <td>Dès réception</td>
+                        <td>{{ results["aa.createdon"] | date: "dd-MM-yyyy" }}</td>
+                    </tr>
+                </table>
+            </section>
+
+            <section class="invoice-summary">
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th>Qty</th>
+                            <th>Description</th> 
+                            <th>Prix unitaire</th>
+                            <th>Montant</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in queryInvoiceDetails.results.entities %}
+                        <tr>
+                            <td>{{ product.quantity | round: 2 }}</td>
+                            <td>{{ product.icd_productname }}</td>
+                            <td>${{ product.priceperunit | round: 2 }}</td>
+                            <td>${{ product.baseamount | round: 2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3" class="right-align">Rabais:</td>
+                            <td>${{ results["aa.totaldiscountamount"] | round: 2 }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" class="right-align">Sous-total:</td>
+                            <td>${{ results["aa.totallineitemamount"] | round: 2 }}</td>
+                        </tr>
+                        <!-- <tr>
+                            <td colspan="3" class="right-align">Taxe totale:</td>
+                            <td>${{ results["aa.totaltax"] | round: 2 }}</td>
+                        </tr> -->
+                        <tr>
+                            <td colspan="3" class="right-align">TPS/TVH:</td>
+                            <td>${{ results["aa.icd_totalgsthstamt"] | round: 2 }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" class="right-align">TVP/TVQ:</td>
+                            <td>${{ results["aa.icd_totalqstpstamt"] | round: 2 }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" class="right-align total-label">Total:</td>
+                            <td class="total-amount">${{ results["aa.totalamount"] | round: 2 }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </section>
+            
+
+            {% if invoiceCount > 1 and applicationType  == 'd1d2d89c-75b1-ef11-a72d-6045bdf9b61a' %}
+        
+                <p><strong>Factures restantes</strong></p>
+                <section class="invoice-summary">
+                    <table class="summary-table">
+                        <thead>
+                            <tr>
+                                <th>Numéro de facture</th>
+                                <th>Date d'échéance</th>
+                                <th>Montant total</th>                                
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for invoice in queryInvoice.results.entities offset:1 %}
+                            <tr>
+                                <td>{{ invoice.invoicenumber }}</td>
+                                <td>{{ invoice.duedate | date: "dd-MM-yyyy" }}</td>
+                                <td>${{ invoice.totalamount | round: 2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </section>
+            {% endif %}
+
+
+            <section class="invoice-notes">
+                <p>Numéro de remise de la TPS : 12179 8201</p>
+                <p>Numéro de remise de la TVQ : 1204855478</p>                
+            </section>
+        </div>
+
+        
+
+
+        {% if appPaymentmethod == 100000000 and firstInvoice.totalamount > 0 %}
+            <div class="pay-now-container">
+                <button class="pay-now-btn btn btn-primary">Payer maintenant</button>
+                <div class="paypal-modal modal" style="display: none;">
+                    <div class="modal-content">
+                        <div id="spinnerOverlay" style="display: none;">
+                            <div id="processingSpinner">
+                                    <div class="spinner"></div>
+                                    <div class="spinner-text">Traitement de votre transaction...</div>
+                            </div>
+                        </div>
+                        {{ snippets["PayPal Payments"] }}
+                    </div>
+                </div>
+            </div>
+
+        {%elsif firstInvoice.totalamount <= 0%}
+        <div class="invoice-message">
+            <br>
+            <p>Cette facture a un solde de <strong>0,00 $</strong>. Aucun paiement n'est requis.</p><br>
+            <a href="https://www.ias.ca/" class="btn button1" id="finishBtn" style="margin-left: 0; margin-right: auto; font-family: avenir !important; margin-bottom:15px">Finition</a>
+            <br>
+        </div>
+
+        {% else %}
+            <div id="paymentMethodMessage" class="alert alert-info mt-3"></div>
+                <h4 class="alert-heading">Informations de paiement</h4>
+                <ul class="list-unstyled">
+                    <li><strong>Banque bénéficiaire :</strong> Scotiabank</li>
+                    <li><strong>Adresse de la banque :</strong> 70 Carlton Street, Toronto, ON, M5B 1L6</li>
+                    <li><strong>Numéro de transit :</strong> 59436</li>
+                    <li><strong>Numéro d'institution :</strong> 002</li>
+                    <li><strong>Code SWIFT :</strong> NOSCCATT</li>
+                    <!--<li><strong>Code de compensation canadien (optionnel) :</strong> CC0002 34322</li>-->
+                    <li><strong>Client bénéficiaire :</strong> L'Institut des administrateurs de sociétés</li>
+                    <li><strong>Adresse du bénéficiaire :</strong> 250 Yonge Street, Unité 1601, Toronto, ON, M5B 2L7, Canada</li>
+                    <li><strong>Numéro de compte du bénéficiaire :</strong> 65912 0098213</li>
+                </ul>
+            </div>
+            <div class="invoice-message">
+                <br>
+                <a href="https://www.ias.ca/" class="btn button1"  id="finishBtn" style="margin-left: 0; margin-right: auto; font-family: avenir !important; margin-bottom:15px">Finition</a>
+                <br>
+            </div>        
+        {% endif %}
+
+    {%else%}
+
+        <div class="back-to-application">
+            <p class="mt-4" ><button class="btn-primary"  onclick="window.location.href='/en-US/Application-Form/?id={{ appID }}'"><i class="fa fa-arrow-left" aria-hidden="true"></i></button></p>
+        </div>
+        <div class="container invoice-container">
+            <header class="container invoice-header">
+                <div>
+                    <img src="/ICD- Logo.png" alt="ICD Logo" class="icdinvoicelogo">
+                </div>
+                <div class="invoice-details">
+                    <h1>INVOICE</h1>
+            </div>
+            </header>
+            <div class="company-invoice-details">
+                <div class="company-address">
+                    <p>1601-250 Yonge Street</p>
+                    <p>Toronto, ON M5B 2L7</p>
+                </div>
+                <div class="invoice-number">
+                    <p>Invoice No: <strong>{{ results["aa.invoicenumber"] }}</strong></p>
+                </div>
+            </div>
+
+            
+            
+            <section class="invoice-address">
+                <div class="address-label">
+                    <h3>Sold To:</h3>
+                </div>
+                <div class="address-content">
+                <p> {{ application.icd_firstname }} {{ application.icd_lastname }}<br/>
+                    {{ application.icd_line1 }}<br/>
+                    {% if application.icd_line2 %}
+                        {{ application.icd_line2 }}<br/>
+                    {%endif%}
+                    {{ application.icd_city }}<br/>
+                    {{ application.icd_stateorprovince }}<br/>
+                    {{ application.icd_country }} {{ application.icd_postalcode }}
+                </p>
+                </div>
+                <div class="address-label">
+                    <h3>Bill To:</h3>
+                </div>
+                <div class="address-content">
+                {% if applicationBillTo %}
+                    <p>{{application.icd_billto }}<br/>
+                        {{ application.icd_billtoline1 }}<br/>
+                        {% if application.icd_billtoline2 %}
+                            {{ application.icd_billtoline2 }}<br/>
+                        {%endif%}
+                        {{ application.icd_billtocity }}<br/>
+                        {{ application.icd_billtostateorprovince }}<br/>
+                        {{ application.icd_billtocountry }} {{ application.icd_billtopostalcode }}
+                        </p>
+                {% else %}
+                    {% if contactDetails.results.entities.size > 0 %}
+                        {% assign conResults = contactDetails.results.entities.first %}
+                        <p>{{ conResults["customerid"].name }}<br/>
+                        {{ conResults["invContact.address1_line1"] }}<br/>
+                        {% if conResults["invContact.address1_line2"] %}
+                            {{ conResults["invContact.address1_line2"] }}<br/>
+                        {%endif%}
+                        {{ conResults["invContact.address1_city"] }}<br/>
+                        {{ conResults["invContact.address1_stateorprovince"] }}<br/>
+                        {{ conResults["invContact.address1_country"] }} {{ conResults["invContact.address1_postalcode"] }}
+                        </p>
+                    {% endif %}
+                {% endif %}
+                </div>  
+            </section>
+
+
+            <section class="invoice-metadata">
+                <table class="metadata-table">
+                    <tr>
+                        <th>Purchase Order No.</th>
+                        <th>Order Date</th>
+                        <th>Terms</th>
+                        <th>Invoice Date</th>
+                    </tr>
+                    <tr>
+                        {%if results["aa.icd_purchaseorderno"] %}
+                            <td>{{ results["aa.icd_purchaseorderno"] | default: "N/A" }}</td>
+                        {% else %}
+                            <td>{{ applicationPO | default: "N/A" }}</td>
+                        {%endif%}
+                        <td>{{ results["aa.createdon"] | date: "dd-MM-yyyy" }}</td>
+                        <td>Upon Receipt</td>
+                        <td>{{ results["aa.createdon"] | date: "dd-MM-yyyy" }}</td>
+                    </tr>
+                </table>
+            </section>
+
+            <section class="invoice-summary">
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th>Qty</th>
+                            <th>Description</th> 
+                            <th>Unit Price</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in queryInvoiceDetails.results.entities %}
+                        <tr>
+                            <td>{{ product.quantity | round: 2 }}</td>
+                            <td>{{ product.icd_productname }}</td>
+                            <td>${{ product.priceperunit | round: 2 }}</td>
+                            <td>${{ product.baseamount | round: 2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3" class="right-align">Discount:</td>
+                            <td>${{ results["aa.totaldiscountamount"] | round: 2 }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" class="right-align">Subtotal:</td>
+                            <td>${{ results["aa.totallineitemamount"] | round: 2 }}</td>
+                        </tr>
+                        <!-- <tr>
+                            <td colspan="3" class="right-align">Total Tax:</td>
+                            <td>${{ results["aa.totaltax"] | round: 2 }}</td>
+                        </tr> -->
+                        <tr>
+                            <td colspan="3" class="right-align">GST/HST:</td>
+                            <td>${{ results["aa.icd_totalgsthstamt"] | round: 2 }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" class="right-align">PST/QST:</td>
+                            <td>${{ results["aa.icd_totalqstpstamt"] | round: 2 }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3" class="right-align total-label">Total:</td>
+                            <td class="total-amount">${{ results["aa.totalamount"] | round: 2 }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </section>
+            
+
+            {% if invoiceCount > 1 and applicationType  == 'd1d2d89c-75b1-ef11-a72d-6045bdf9b61a' %}
+        
+                <p><strong>Remaining Invoices</strong></p>
+                <section class="invoice-summary">
+                    <table class="summary-table">
+                        <thead>
+                            <tr>
+                                <th>Invoice Number</th>
+                                <th>Due Date</th>
+                                <th>Total Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for invoice in queryInvoice.results.entities offset:1 %}
+                            <tr>
+                                <td>{{ invoice.invoicenumber }}</td>
+                                <td>{{ invoice.duedate | date: "dd-MM-yyyy" }}</td>
+                                <td>${{ invoice.totalamount | round: 2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </section>
+            {% endif %}
+
+
+            <section class="invoice-notes">
+                <td>GST Remittance Number: 12179 8201</td><br>
+                <td>QST Remittance Number: 1204855478</td>
+            </section>
+
+            
+
+        </div>
+        
+        {% if appPaymentmethod == 100000000 and firstInvoice.totalamount > 0%}
+            <div class="pay-now-container">
+                <button class="pay-now-btn btn btn-primary">Pay Now</button>
+                <div class="paypal-modal modal" style="display: none;">
+                    <div class="modal-content">
+                        <span class="close-modal">&times;</span>
+                        <div id="spinnerOverlay" style="display: none;">
+                        <div id="processingSpinner">
+                                <div class="spinner"></div>
+                                <div class="spinner-text">Processing your transaction...</div>
+                        </div>
+                        </div>
+                        {{ snippets["PayPal Payments"] }}
+                    </div>
+                </div>
+            </div>
+        {%elsif firstInvoice.totalamount <= 0 %}
+            <div class="invoice-message">
+                <br>
+                <p>This invoice has a balance of <strong>$0.00</strong>. No payment is required.</p><br>
+                <a href="https://www.icd.ca/" class="btn button1" id="finishBtn" style="margin-left: 0; margin-right: auto; font-family: avenir !important;margin-bottom:15px">Finish</a>
+                <br>
+            </div>
+        {% else %}
+            <div id="paymentMethodMessage" class="alert alert-info mt-3">
+                <h4 class="alert-heading">Payment Information</h4>
+                <ul class="list-unstyled">
+                    <li><strong>Beneficiary Bank:</strong> Scotiabank</li>
+                    <li><strong>Bank Address:</strong> 70 Carlton Street, Toronto, ON, M5B 1L6</li>
+                    <li><strong>Transit number:</strong> 59436</li>
+                    <li><strong>Institution number:</strong> 002</li>
+                    <li><strong>SWIFT CODE:</strong> NOSCCATT</li>
+                    <!--<li><strong>Canadian Clearing Code (optional):</strong> CC0002 34322</li>-->
+                    <li><strong>Beneficiary client:</strong> The Institute of Corporate Directors</li>
+                    <li><strong>Beneficiary Address:</strong> 250 Yonge Street, Unit 1601, Toronto, ON, M5B 2L7, Canada</li>
+                    <li><strong>Beneficiary account number:</strong> 65912 0098213</li>
+                </ul>
+            </div>
+            <div class="invoice-message">
+                <br>
+                <a href="https://www.icd.ca/" class="btn button1" id="finishBtn" style="margin-left: 0; margin-right: auto; font-family: avenir !important; margin-bottom:15px">Finish</a>
+                <br>
+            </div>  
+        {% endif %}
+    {% endif %}
+{% else %}
+    <div id="errorContainer">
+        <div id="errorMessage">
+            <h3>Error</h3>            
+        </div>
+    </div>
+
+{% endif %}
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-modal/0.9.1/jquery.modal.min.js"></script>
+<script>
+    // $(document).ready(function() {
+    //     $('.pay-now-btn').on('click', function(e) {
+    //         e.preventDefault();
+    //         $('.paypal-modal').show();
+    //     });
+    // });
+
+    $(document).ready(function() {
+        $('.pay-now-btn').on('click', function(e) {
+            e.preventDefault();
+            $('.paypal-modal').fadeIn(); // Smooth appearance
+        });
+
+        // Optional: Close modal when clicking outside or pressing Esc
+        $(document).on('click', function(e) {
+            if ($(e.target).closest('.modal-content, .pay-now-btn').length === 0) {
+                $('.paypal-modal').fadeOut();
+            }
+        });
+
+        $(document).on('keydown', function(e) {
+            if (e.key === "Escape") {
+                $('.paypal-modal').fadeOut();
+            }
+        });
+
+        // Close modal on clicking close button
+        $('.close-modal').on('click', function() {
+            $('.paypal-modal').fadeOut();
+        });
+
+        // Close modal when clicking outside or pressing Esc
+        $(document).on('click', function(e) {
+            if ($(e.target).closest('.modal-content, .pay-now-btn').length === 0) {
+                $('.paypal-modal').fadeOut();
+            }
+        });
+    });
+</script>
+
+{% endblock %}

@@ -1,0 +1,258 @@
+{% extends "Layout 2 Column Wide Right" %}
+{% block aside %}
+{% assign nav = weblinks["Profile Navigation"] %}
+{% assign zContact = entities['contact'][user.id] %}
+
+
+
+{% include 'ICD - CSS'%}
+{% include 'ICD Helper - WebAPI Wrapper AJAX' %}
+{% include 'ICD - Modal'%}
+
+<style>
+  .nav-list {
+    list-style-type: none;
+    /* Remove bullets */
+    padding-left: 0;
+    /* Remove default padding */
+  }
+
+  .nav-item {
+    margin: 5px;
+    /* Remove margin around list items */
+    padding: 0;
+    /* Remove padding around list items */
+  }
+
+  .reset-password-link {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #004184;
+    color: white;
+    border: 2px solid #004184;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: background-color 0.3s, border-color 0.3s;
+  }
+
+  .reset-password-text {
+    font-size: larger;
+    font-family: Arial, sans-serif;
+    color: white;
+  }
+
+  .reset-password-link:hover {
+    background-color: #002d62;
+    border-color: #002d62;
+  }
+</style>
+{% endblock %}
+
+
+{% block main %}
+{% assign is_delegate_user = zContact.icd_isdelegateuser | default: false %}
+
+{% if is_delegate_user %}
+<script>
+   console.log("✅ This user is a delegate.");
+  // Wait for DOM to load
+  document.addEventListener("DOMContentLoaded", function () {
+     // Find all <label> elements with for="Subgrid_ProfessionalExperience"
+  const label = document.querySelector('label[for="Subgrid_ProfessionalExperience"]');
+
+  if (label) {
+    // Find the closest <td> ancestor of that label
+    const td = label.closest('td');
+    if (td) {
+      td.style.display = "none";
+    }
+  }
+  });
+</script>
+{% endif %}
+<script type="text/javascript" src="https://services.postcodeanywhere.co.uk/js/address-3.91.js"></script>
+<script>
+  {% include "AddressComplete" line1: "address1_line1" line2: "address1_line2" city: "address1_city" province: "address1_stateorprovince" postalcode: "address1_postalcode" country: "address1_country" LimitCountry: "CAN ,AFG, ALB, DZA, AND, AGO, ATG, ARG, ARM, AUS, AUT, AZE, BHS, BHR, BGD, BRB, BLR, BEL, BLZ, BEN, BTN, BOL, BIH, BWA, BRA, BRN, BGR, BFA, BDI, CPV, KHM, CMR, CAF, TCD, CHL, CHN, COL, COM, COG, COD, CRI, HRV, CUB, CYP, CZE, DNK, DJI, DMA, DOM, ECU, EGY, SLV, GNQ, ERI, EST, SWZ, ETH, FJI, FIN, FRA, GAB, GMB, GEO, DEU, GHA, GRC, GRD, GTM, GIN, GNB, GUY, HTI, HND, HUN, ISL, IND, IDN, IRN, IRQ, IRL, ISR, ITA, JAM, JPN, JOR, KAZ, KEN, KIR, KWT, KGZ, LAO, LVA, LBN, LSO, LBR, LBY, LIE, LTU, LUX, MDG, MWI, MYS, MDV, MLI, MLT, MHL, MRT, MUS, MEX, FSM, MDA, MCO, MNG, MNE, MAR, MOZ, MMR,NAM, NRU, NPL, NLD, NZL, NIC, NER, NGA, PRK, MKD, NOR, OMN, PAK, PLW, PAN, PNG, PRY, PER, PHL, POL, PRT, QAT, ROU, RUS, RWA, KNA, LCA, VCT, WSM, SMR, STP, SAU, SEN, SRB, SYC, SLE, SGP, SVK, SVN, SLB, SOM, ZAF, KOR, SSD, ESP, LKA, SDN, SUR, SWE, CHE, SYR, TWN, TJK, TZA, THA, TLS, TGO, TON, TTO, TUN, TUR, TKM, TUV, UGA, UKR, ARE, GBR, USA, URY, UZB, VUT, VAT, VEN, VNM, YEM, ZMB, ZWE" %}
+
+
+  $(window).on('load', function () {
+
+    // Disable and  greyed out first name
+    $('#firstname').prop('disabled', true).each(function () {
+      $(this).attr('style', function (i, style) {
+        return (style || '') + 'background-color: #f2f2f2 !important;';
+      }).attr('title', 'To change your name, please contact ICD support.'); // Add tooltip
+    });
+
+    // Disable and  greyed out last name
+    $('#lastname').prop('disabled', true).each(function () {
+      $(this).attr('style', function (i, style) {
+        return (style || '') + 'background-color: #f2f2f2 !important;';
+      }).attr('title', 'To change your name, please contact ICD support.'); // Add tooltip
+    });
+
+    //START code to grey our address field when using candapostApi Field------------------------->
+    $('#override_address1_line1').on('change', function () {
+      if ($(this).is(':checked')) {
+        // Remove the inline background color CSS with !important if the checkbox is checked
+        $('#address1_line1, #address1_city, #address1_stateorprovince, #address1_postalcode,#icd_canadastateorprovince, #address1_country').each(function () {
+          $(this).css('background-color', ''); // Remove inline style
+          $(this).attr('style', function (i, style) {
+            return style ? style.replace(/background-color:.*?;/gi, '') : '';
+          });
+        });
+        toggleProvinceInput();
+      } else {
+        // Add the inline background  color CSS with !important if the checkbox is unchecked
+        $('#address1_line1, #address1_city, #address1_stateorprovince, #address1_postalcode,#icd_canadastateorprovince, #address1_country').each(function () {
+          $(this).attr('style', function (i, style) {
+            return (style || '') + 'background-color: #f2f2f2 !important;';
+          });
+        });
+        toggleProvinceInput();
+      }
+    });
+
+    // Trigger change event on page load to apply the initial state
+    $('#override_address1_line1').trigger('change');
+
+    // Move #icd_canadastateorprovince into the same <td> as #icd_stateorprovince
+    $('#address1_stateorprovince').closest('td').append($('#icd_canadastateorprovince'));
+
+    // Hide the Canadian province input initially
+    $('#icd_canadastateorprovince').hide();
+
+    function toggleProvinceInput() {
+      $('#icd_canadastateorprovince_label').closest('tr').hide();
+      var countryValue = $('#address1_country').val();
+      if (countryValue === 'Canada' && $('#override_address1_line1').is(':checked')) {
+        // Show the Canadian province input and hide the other one
+        $('#address1_stateorprovince').hide();
+        $('#icd_canadastateorprovince').show();
+      } else {
+        // Show the default state/province input and hide the Canadian province one
+        //$('#icd_stateorprovince').val('');
+        $('#address1_stateorprovince').show();
+        $('#icd_canadastateorprovince').hide();
+      }
+    }
+
+    // Trigger toggle on page load 
+    toggleProvinceInput();
+
+    // Listen for changes to the country field
+    $('#address1_country').on('change', function () {
+      toggleProvinceInput();
+    });
+
+    $('#icd_canadastateorprovince').on('change', function () {
+      // Clear the icd_stateorprovince field
+      $('#icd_stateorprovince').val('');
+
+      // Get the selected option's text
+      var selectedText = $(this).find('option:selected').text();
+
+      // Copy the selected text to the icd_stateorprovince field
+      $('#address1_stateorprovince').val(selectedText);
+    });
+    //END code to grey our address  field when using candapostApi Field------------------------->
+
+
+    //account lookup
+    $('#icd_account').closest('td').hide();
+    var divOrgCheckbox = `
+        <input type="text" name="companyInfoCompleteSearch" id="companyInfoCompleteSearch"
+            class="text form-control" placeholder="{{ snippets["Application/AccountLookup/Typing"] }}"
+            autocomplete="pca-override" aria-label="companyInfoCompleteSearch">
+        <div class="help-block">
+            <div>
+                <label style="font-weight: normal;">
+                    <input onclick="" type="checkbox" id="override_icdOrganisationName">
+                    {{ snippets["Application/AccountLookup/Checkbox"] }}
+                </label>
+            </div>
+        </div>`;
+
+    // Find the parent td of the input with id "icd_name" and append the new HTML
+    var parentTd = $('#adx_organizationname').closest('td');
+    parentTd.append(divOrgCheckbox);
+
+    $('#override_icdOrganisationName').on('change', function () {
+      if ($(this).is(':checked')) {
+        // If the checkbox is checked, hide icd_name and show companyInfoCompleteSearch
+        // If the checkbox is unchecked, hide companyInfoCompleteSearch and show icd_name
+        $('#companyInfoCompleteSearch').hide();
+        $('#adx_organizationname').show();
+
+      } else {
+        $('#adx_organizationname').hide();
+        $('#companyInfoCompleteSearch').show();
+      }
+    });
+
+
+    // Trigger change event on page load to apply the initial state
+    $('#override_icdOrganisationName').trigger('change');
+
+    // Autopopulate account field  -------------------------------------------->
+    $("#companyInfoCompleteSearch").autocomplete({
+      source: function (request, response) {
+        if (request.term.length >= 3) {
+          $.ajax({
+            url: "/_api/accounts?$select=name,accountid",
+            type: "GET",
+            data: {
+              $filter: "contains(name,'" + request.term + "')",
+              $top: 5
+            },
+            success: function (data) {
+              var results = $.map(data.value, function (account) {
+                return {
+                  label: account.name,  // Displayed va lue in the suggestion list
+                  value: account.name,  // Value returned on selection
+                  accountData: account  // Store the entire account object for later use
+                };
+              });
+              response(results);
+            },
+            error: function () {
+              console.error("Error fetching accounts from API");
+            }
+          });
+        }
+      },
+      minLength: 3,
+      select: function (event, ui) {
+        // Access the selected account's data
+        var selectedAccount = ui.item.accountData;
+
+        // Autopopulate fields with the selected account's data
+        $("#icd_account").val(selectedAccount.accountid);
+        $("#adx_organizationname").val(selectedAccount.name);
+      }
+    });
+    var companyValue = $('#adx_organizationname').val();
+    if (companyValue !== "") {
+      $('#companyInfoCompleteSearch').val(companyValue); // Copy the value to the companyInfoCompleteSearch field
+    };
+    // Clear the #icd_account dropdown when #icd_name changes
+    $('#adx_organizationname').on('change input', function () {
+      $('#icd_account').val(''); // Clear the value of the dropdown
+    });
+
+    //End Autopopulate account field -------------------------------------------->
+
+
+
+  });
+
+
+</script>
+
+
+
+
+{% include 'Page Copy' %}
+{% editable snippets 'Profile/Header/Text'%}
+{% entityform name: 'Member Profile (DU)' %}
+{% endblock %}

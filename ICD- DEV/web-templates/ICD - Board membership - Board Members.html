@@ -1,0 +1,106 @@
+{% include 'Default studio template'%}
+{% assign bmID = request.params['id' ] | default: "" %}
+{% include 'ICD - CSS'%}
+{% include 'ICD - Modal'%}
+{% assign boardmembership = entities['icd_boardmembership'][bmID] %}
+{% assign boardRep = boardmembership.icd_representative.id %}
+{% assign boardStatus = boardmembership.statecode.value %}
+{% assign bmEligible = false %}
+{% if boardRep == user.id%}
+  {% assign bmEligible = true %}
+{%endif%}
+
+{% block main %}
+
+{% fetchxml Applications %}
+<fetch version="1.0" output-format="xml-platform" mapping="logical" distinct="true">
+  <entity name="icd_application">
+    <attribute name="icd_applicationid" />
+    <filter type="and">
+      <condition attribute="icd_apptype" operator="eq" value="{9EFDA25D-4887-EF11-AC20-6045BDCD6AD5}" />
+      <condition attribute="statecode" operator="eq" value="0" />
+    </filter>
+    <link-entity name="icd_boardmembership_icd_application" from="icd_applicationid" to="icd_applicationid" visible="false" intersect="true">
+      <link-entity name="icd_boardmembership" from="icd_boardmembershipid" to="icd_boardmembershipid" alias="ab">
+        <filter type="and">
+          <condition attribute="icd_boardmembershipid" operator="eq" uitype="icd_boardmembership" value="{{bmID}}" />
+          <condition attribute="icd_untilll" operator="next-x-days" value="30" />
+        </filter>
+      </link-entity>
+    </link-entity>
+  </entity>
+</fetch>
+{% endfetchxml %}
+
+{% assign appResults = Applications.results %}
+
+<div class="row sectionBlockLayout text-start"
+  style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout"
+      style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">
+      {% if bmEligible and boardStatus == 0%}
+        {% if appResults.entities.size > 0 %}
+            {% assign applicationData = appResults.entities[0] %}
+            {% assign applicationId = applicationData.icd_applicationid %}
+            {% assign redirectURL = sitemarkers['BMApplicationForm'].url | append: "/?id=" | append: applicationId %}
+            <button onclick="window.location.href='{{ redirectURL }}'" type="button" class="btn button1 mb-2" style="margin-left: auto;">Renew Board Membership</button>
+        {% else%}
+            <button onclick="editMembers()" type="button" class="btn button1 mb-2" style="margin-left: auto;">Edit Members</button>
+        {% endif %}
+      {% endif %}
+        {% entityform name: 'ZPortal - Board Members' %}
+    </div>
+  </div>
+</div>
+<script>
+$(document).ready(function() {
+	var entityGrid = $(".entity-grid.subgrid").eq(0);
+	entityGrid.on("loaded", function () {
+		var rowTotal = 0;
+		entityGrid.find("table tbody > tr").each(function(index, tr) {
+			rowTotal++; 
+		});
+
+		$("#textfieldlogicalname").val(rowTotal);
+	});
+});
+
+  function editMembers() {
+    showLoadingModal("Please wait... Generating your form");
+    var EditMemberFlowUrl = "/_api/cloudflow/v1.0/trigger/f0f64fde-7381-ef11-ac21-6045bdf99e57";
+    var data = {};
+    data["boardmembership"] = "{{bmID}}";
+    var payload = {};
+    payload.eventData = JSON.stringify(data)
+
+    shell
+      .ajaxSafePost({
+        type: "POST",
+        contentType:"application/json",
+        url: EditMemberFlowUrl,
+        data: JSON.stringify(payload),
+        processData: false,
+        global:false,
+      })
+      .done(function (response) {
+        console.log("Success:", response);
+        
+        // Assuming response is in the format {"response": "some-id"}
+        var responseObject = JSON.parse(response);
+        var id = responseObject.response; // Extract the id
+
+        // Redirect the user to the desired URL
+        var originUrl = window.location.origin;
+        var redirectUrl = originUrl + "/Application-Form/?id=" + id;
+        window.location.href = redirectUrl;
+      })
+      .fail(function (xhr, status, error) {
+        console.log("Failed:", status, error);
+        console.log("Response:", xhr.responseText);
+      });
+  }
+
+</script>
+
+{% endblock %}

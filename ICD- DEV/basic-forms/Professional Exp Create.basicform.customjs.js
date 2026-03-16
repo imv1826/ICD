@@ -1,0 +1,87 @@
+$(window).on('load', function () {
+    var typingSnippet = sessionStorage.getItem("Application/AccountLookup/Typing");
+     var checkboxSnippet = sessionStorage.getItem("Application/AccountLookup/Checkbox");
+
+   $('#icd_account').closest('td').hide();
+    var divOrgCheckbox = `
+        <input type="text" name="companyInfoCompleteSearch" id="companyInfoCompleteSearch"
+            class="text form-control" placeholder="${typingSnippet}"
+            autocomplete="pca-override">
+        <div class="help-block">
+            <div>
+                <label style="font-weight: normal;">
+                    <input onclick="" type="checkbox" id="override_icdOrganisationName">
+                    ${checkboxSnippet}
+                </label>
+            </div>
+        </div>`;
+
+    // Find the parent td of the input with id "icd_name" and append the new HTML
+    var parentTd = $('#icd_company').closest('td');
+    parentTd.append(divOrgCheckbox);
+
+    $('#override_icdOrganisationName').on('change', function () {
+        if ($(this).is(':checked')) {
+            // If the checkbox is checked, hide icd_name and show companyInfoCompleteSearch
+            // If the checkbox is unchecked, hide companyInfoCompleteSearch and show icd_name
+            $('#companyInfoCompleteSearch').hide();
+            $('#icd_company').show();
+
+        } else {
+            $('#icd_company').hide();
+            $('#companyInfoCompleteSearch').show();
+        }
+    });
+
+    // Trigger change event on page load to apply the initial state
+    $('#override_icdOrganisationName').trigger('change');
+
+    // Autopopulate account field  -------------------------------------------->
+    $("#companyInfoCompleteSearch").autocomplete({
+        source: function (request, response) {
+            if (request.term.length >= 3) {
+                $.ajax({
+                    url: "/_api/accounts?$select=name,accountid",
+                    type: "GET",
+                    data: {
+                        $filter: "contains(name,'" + request.term + "')",
+                        $top: 5
+                    },
+                    success: function (data) {
+                        var results = $.map(data.value, function (account) {
+                            return {
+                                label: account.name,  // Displayed va lue in the suggestion list
+                                value: account.name,  // Value returned on selection
+                                accountData: account  // Store the entire account object for later use
+                            };
+                        });
+                        response(results);
+                    },
+                    error: function () {
+                        console.error("Error fetching accounts from API");
+                    }
+                });
+            }
+        },
+        minLength: 3,
+        select: function (event, ui) {
+            // Access the selected account's data
+            var selectedAccount = ui.item.accountData;
+
+            // Autopopulate fields with the selected account's data
+            $("#icd_account").val(selectedAccount.accountid);
+            $("#icd_company").val(selectedAccount.name);
+        }
+    });
+    var companyValue = $('#icd_company').val();
+    if (companyValue !== "") {
+        $('#companyInfoCompleteSearch').val(companyValue); // Copy the value to the companyInfoCompleteSearch field
+    };
+    // Clear the #icd_account dropdown when #icd_name changes
+    $('#icd_company').on('change input', function () {
+        $('#icd_account').val(''); // Clear the value of the dropdown
+    });
+
+    //End Autopopulate account field -------------------------------------------->
+
+});

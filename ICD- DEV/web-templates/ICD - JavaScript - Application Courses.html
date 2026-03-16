@@ -1,0 +1,273 @@
+{% assign icdApplicationId = request.params['id'] %}
+
+{% fetchxml activeInvoices cache: "false"%}
+<fetch>
+  <entity name="invoice">
+    <attribute name="totalamount" />
+    <filter>
+      <condition attribute="statecode" operator="eq" value="0" />
+      <condition attribute="icd_application" operator="eq" value="{{ icdApplicationId }}" />
+      <condition attribute="createdon" operator="on-or-before" value="{{ now | date: 'o' }}" />
+    </filter>
+  </entity>
+</fetch>
+{% endfetchxml %}
+{% fetchxml eventRecord cache: "false" %}
+<fetch>
+  <entity name="msevtmgt_event">
+    <attribute name="msevtmgt_name" />
+    <attribute name="icd_enableattestationspageduringcheckout" />
+    <link-entity name="icd_application" from="icd_registrationfor" to="msevtmgt_eventid" link-type="inner" alias="aa">
+      <filter type="and">
+        <condition attribute="icd_applicationid" operator="eq" value="{{ icdApplicationId }}"/>
+      </filter>
+    </link-entity>
+  </entity>
+</fetch>
+{% endfetchxml %}
+{% assign totalAmount = 0 %}
+{% if activeInvoices.results.entities.size > 0 %}
+  {% for invoice in activeInvoices.results.entities %}
+      {% assign totalAmount = totalAmount | plus: invoice.totalamount %}
+  {% endfor %}
+{% endif %}
+{% assign attestationRequiredValue = false %}
+{% if eventRecord.results.entities.size > 0 %}
+  {% assign attestationRequiredValue = eventRecord.results.entities[0].icd_enableattestationspageduringcheckout %}
+{% endif %}
+<input type="hidden" id="attestationRequiredHidden" value="{{ attestationRequiredValue }}" />
+
+<script>
+
+  $(window).on('load', function () { 
+
+    // Combined selector for both fields
+    var taxFields = $("input[id$='icd_taxexemptionnumber'], input[id$='icd_cracharitableregistrationnumber']");
+
+    if (taxFields.length > 0) {
+      taxFields.on("input", function () {
+          var rawValue = $(this).val().replace(/\D/g, ""); // Remove non-numeric characters
+          var id = $(this).attr("id");
+          var codeType = id.includes("cracharitableregistrationnumber") ? " RR" : " RT"; // Decide between RR and RT
+  
+          let formattedValue = rawValue;
+  
+          if (rawValue.length > 9) {
+              formattedValue = rawValue.substring(0, 9) + codeType + rawValue.substring(9, 13);
+          } else if (rawValue.length > 0) {
+              formattedValue = rawValue.substring(0, 9);
+          }
+  
+          $(this).val(formattedValue);
+      });
+  
+      taxFields.on("blur", function () {
+          var finalValue = $(this).val();
+          var id = $(this).attr("id");
+          var codeType = id.includes("cracharitableregistrationnumber") ? " RR0000" : " RT0000";
+  
+          if (/^\d{9}$/.test(finalValue)) {
+              $(this).val(finalValue + codeType);
+          }
+      });
+    }
+
+       
+    console.log("{{totalAmount}}");
+    $('#icd_sin').parent().siblings().addClass('required');
+    var varInvoice = {{ totalAmount | default: 0 }}; 
+    // Check if the input  field with id icd_optintoreceivet2202 exists 
+    if ($('#icd_optintoreceivet2202').length) {
+
+
+      // Check if varInvoice is greater than 100
+      if (varInvoice > 100) {
+
+        // Show parent tr of #icd_optintoreceivet2202
+        $('#icd_optintoreceivet2202').closest('tr').show();
+         $('#icd_optintoreceivet2202').prop('checked', true);
+        toggleNextButton();
+        // Add change event listener for the checkbox
+        $('#icd_optintoreceivet2202').on('change', function () {
+          toggleNextButton();
+          if ($(this).is(':checked')) {
+            // If checked, show parent tr of #icd_sin
+            $('#icd_sin').closest('tr').show();
+            $('#icd_sin').prop('required',true);
+          } else {
+            // If unchecked, hide parent tr of #icd_sin
+            toggleNextButton();
+            $('#icd_sin').closest('tr').hide();
+            $('#icd_sin').prop('required',false);
+          }
+        });
+
+        // Trigger change event to handle initial state
+        $('#icd_optintoreceivet2202').trigger('change');
+      } else {
+        // If varInvoice <= 100, hide both parent tr of #icd_optintoreceivet2202 and #icd_sin
+        $('#icd_optintoreceivet2202').closest('tr').hide();
+        $('#icd_sin').closest('tr').hide();
+        $('#icd_sin').prop('required',false);
+      }
+    }
+    
+
+     // Check if the select element with ID 'icd_paymentmethod' exists on the page
+    //  if ($("#icd_paymentmethod").length) {
+    //     // Remove the <option> with value '100000001' (EFT) from the dropdown
+    //     $("#icd_paymentmethod option[value='100000001']").remove();
+    // }
+
+    
+  
+    $('#icd_sin').on('input', function(e) {
+
+          let textValue = $(this).val(); // Get the value of the text field
+          let charCount = textValue.length; // Get the number of characters
+          console.log("Number of characters:", charCount);
+        toggleNextButton();
+        var sinValue = $(this).val().replace(/\D/g, ''); // Remove non-numeric characters
+        var formattedValue = '';
+
+        // Prevent input longer than 9 digits
+        if (sinValue.length > 9) {
+            sinValue = sinValue.substring(0, 9);
+        }
+
+        // Block first digit being 0 or 8
+        if (sinValue.length > 0 && (sinValue.charAt(0) === '0' || sinValue.charAt(0) === '8')) {
+            sinValue = sinValue.substring(1); // Remove invalid first character
+        }
+
+
+      // Set the formatted value
+      $(this).val(sinValue);
+    });
+
+  // Prevent pasting invalid content
+    $('#icd_sin').on('paste', function(e) {
+        var clipboardData = e.originalEvent.clipboardData.getData('text').replace(/\D/g, '');
+
+        // Prevent pasting if content is not numeric, starts with 0 or 8, or exceeds 9 digits
+        if (!/^[1-79]\d{0,8}$/.test(clipboardData)) {
+            e.preventDefault(); // Block pasting
+        }
+    });
+    function toggleNextButton() {
+      let textValue = $('#icd_sin').val(); // Get the value of the text field
+      let charCount = textValue.length; // Get the number of characters
+      let isChecked = $('#icd_optintoreceivet2202').is(':checked');
+
+      // Enable NextButton only if charCount is 12 and checkbox is checked
+      if (isChecked && charCount === 9) {
+          $('#NextButton').prop('disabled', false); // Enable the button
+      }
+      // If checkbox is unchecked, enable the button regardless of charCount
+      else if (!isChecked) {
+          $('#NextButton').prop('disabled', false); // Enable the button
+      }
+      // If checkbox is checked but charCount is not 12, disable NextButton
+      else {
+          $('#NextButton').prop('disabled', true); // Disable the button
+      }
+    }
+
+    //hide attestation when already a member
+    //var AppContactMembership = {{appContactmemberhsip}};
+    console.log("the membership is",AppContactMembership);
+    var hideMembershipValues = [100000002, 100000005, 100000007];
+      if (hideMembershipValues.includes(AppContactMembership)) {
+        console.log("user is a member, hiding the attestation");
+          // Hide the parent <tr> of the fields
+              // Check the checkboxes if they aren't already checked
+          if (!$('#icd_privpolicy').prop('checked')) {
+            $('#icd_privpolicy').prop('checked', true);
+          }
+          if (!$('#icd_codeofconduct').prop('checked')) {
+              $('#icd_codeofconduct').prop('checked', true);
+          }
+          // if (!$('#icd_cancelpolicy').prop('checked')) {
+          //     $('#icd_cancelpolicy').prop('checked', true);
+          // }
+          $("#icd_privpolicy").closest("tr").hide();
+          $("#icd_codeofconduct").closest("tr").hide();
+          // $("#icd_cancelpolicy").closest("tr").hide();
+      }
+      else{
+        console.log("user is a not a member, showing the attestation");
+      }
+
+    var attestationRequired = $('#attestationRequiredHidden').val() === 'true';   // Convert attestationRequired to a Boolean
+
+    function toggleAttestationField() {
+      var fieldName = "icd_attestationforthechairingboards";
+      var attestationField = $("#" + fieldName);
+      var attestationFieldRow = attestationField.closest('tr');
+      
+      // Toggle visibility and required attribute
+      attestationFieldRow.toggle(attestationRequired);
+      attestationField.prop('required', attestationRequired);
+      
+      if (attestationRequired) {
+          MakeRequired(fieldName);
+      } else {
+          // Clear the value when field is hidden/not required
+          attestationField.prop('checked', false); 
+          MakeNotRequired(fieldName);
+      }
+  }
+
+  function MakeRequired(fieldName) {
+      var field = $("#" + fieldName);
+  field.prop('required', true).closest(".control").prev().addClass("required");
+  
+  var validator = $("<span>", {
+      id: fieldName + "Validator",
+      style: "display:none;",
+      controltovalidate: fieldName,
+      errormessage: "&lt;a href='#" + fieldName + "_label'&gt;" + $("#" + fieldName + "_label").html() + " is a required field.&lt;/a&gt;",
+      evaluationfunction: function() {
+          console.log("Validating field:", fieldName, "with value:", field.val());
+          return field.val() != null && field.val() !== "";
+      }
+  })[0];
+ 
+  Page_Validators.push(validator);
+  console.log("page Validators", Page_Validators);
+  }
+
+  function MakeNotRequired(fieldName) {
+      var field = $("#" + fieldName);
+      field.prop('required', false).closest(".control").prev().removeClass("required");
+  
+
+      Page_Validators = Page_Validators.filter(function(validator) {
+          return validator.id !== fieldName + "Validator";
+      });
+  }
+
+  toggleAttestationField();
+
+  // Find the parent <tr> of the input
+  var parentTr = $("#icd_committeework").closest("tr");
+
+  // Create a new <tr> with a <td> spanning all columns
+    var newRow = $(`
+      <tr>
+          <td colspan="100%">
+              <small class="text-muted d-block mt-2">
+                  {{ snippets["Application/BDPCourse/Step4/Checkboxes"] }}
+              </small>
+          </td>
+      </tr>
+  `);
+  
+
+  // Insert the new <tr> before the parent <tr>
+    $("#icd_committeework").closest("tr").before(newRow);
+    
+    
+  });
+
+</script>

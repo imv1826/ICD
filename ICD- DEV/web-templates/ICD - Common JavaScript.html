@@ -1,0 +1,44 @@
+<script>
+// Function to toggle visibility and required status of a field
+function toggleField(fieldName, isRequired) {
+    var field = $("#" + fieldName);
+    var parentTd = field.parents("td").first();
+    
+    parentTd.toggle(isRequired);
+    field.prop('required', isRequired);
+    
+    if (isRequired) {
+        MakeRequired(fieldName);
+    } else {
+        MakeNotRequired(fieldName);
+    }
+}
+
+// Make a field required
+function MakeRequired(fieldName) {
+    var field = $("#" + fieldName);
+    field.prop('required', true).closest(".control").prev().addClass("required");
+
+    var validator = $("<span>", {
+        id: fieldName + "Validator",
+        style: "display:none;",
+        controltovalidate: fieldName,
+        errormessage: "&lt;a href='#" + fieldName + "_label'&gt;" + $("#" + fieldName + "_label").html() + " is a required field.&lt;/a&gt;",
+        evaluationfunction: function() {
+            return field.val() != null && field.val() !== "";
+        }
+    })[0];
+
+    Page_Validators.push(validator);
+}
+
+// Remove required status from a field
+function MakeNotRequired(fieldName) {
+    var field = $("#" + fieldName);
+    field.prop('required', false).closest(".control").prev().removeClass("required");
+
+    Page_Validators = Page_Validators.filter(function(validator) {
+        return validator.id !== fieldName + "Validator";
+    });
+}
+</script>

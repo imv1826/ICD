@@ -1,0 +1,61 @@
+<footer>
+    {% include 'fetchXML - ClearPortalCache' %}
+    <div hidden>{{ClearPortalCache.results.entities.size}}</div>
+    <div id="footer">
+        <div class="bg-deep-dark-blue w-[100%] h-fit">
+            <div class="px-5 mx-auto max-w-max-content-width pt-lg pb-sm lg:pt-4xl lg:pb-lg">
+                <div class="flex flex-col items-center md:flex-row md:items-center justify-between w-[100%]">
+                    <div class="md:flex-[0.4]">
+                        <a aria-label="Logo link" title="ICD LOGO" href="{{ request.url | base }}/ICDLogoFooter.svg"></a>
+                            <div class="flex justify-start items-center h-[100px] md:mr-lg lg:mr-0">
+                                <div class=""><img src="{{ request.url | base }}/ICDLogoFooter.svg" class="h-16 w-auto md:h-20" alt=""></div>
+                            </div>
+                        </a>
+                    </div>
+                    <div class="w-full flex-[1] flex-col xs:flex-row md:flex-[0.6] flex justify-center lg:justify-end gap-5 my-md lg:my-0"><a title="ICD Chapter network" aria-label="ICD Chapter network" class="btn_new btn secondary_new" href="https://www.icd.ca/chapter-network">ICD Chapter network</a><a title="ICD Directors register" aria-label="ICD Directors register"
+                        class="btn_new btn secondary_new" href="https://www.icd.ca/membership/board-opportunities">ICD Directors register</a></div>
+                </div>
+                <div class="flex w-[100%] flex-col md:flex-row items-center md:items-end justify-between">
+                    <div class="flex-[0.85]">
+                        <div class="flex lg:mt-16">
+                            <div class="flex flex-col items-center mb-0 md:items-start md:mb-md md:mr-20">
+                                <div class="font-bold text-white text-xLarge">1-877-593-7741</div>
+                                <div class="font-[300] w-48 text-center md:!text-left text-white text-xLarge">
+                                    <div>1601—250 Yonge St. Toronto, ON M5B 2L7 Canada
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="hidden md:flex">
+                                <a href="https://www.linkedin.com/company/icdcanada/" class="text-white bg-primary-blue p-[5px] rounded-sm hover:bg-light-blue ml-5 h-fit duration-300 ease-in" target="" aria-label="LinkedIn profile">
+                                    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 448 512" height="25" width="25" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M100.28 448H7.4V148.9h92.88zM53.79 108.1C24.09 108.1 0 83.5 0 53.8a53.79 53.79 0 0 1 107.58 0c0 29.7-24.1 54.3-53.79 54.3zM447.9 448h-92.68V302.4c0-34.7-.7-79.2-48.29-79.2-48.29 0-55.69 37.7-55.69 76.7V448h-92.78V148.9h89.08v40.8h1.3c12.4-23.5 42.69-48.3 87.88-48.3 94 0 111.28 61.9 111.28 142.3V448z"></path>
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="hidden md:inline-block mt-3xl">
+                            <span class="flex text-sm text-white border-r-white pr-xs mr-xs">
+                            <span class="pr-[5px]">© Copyright Institute of Corporate Directors</span>
+                            <span id="copyright-year"></span>
+                            </span>
+                         </div>
+                    </div>
+                    <div class="flex flex-[0.15] flex-col items-center md:items-start mt-md md:mt-0">
+                        <ul class="flex flex-col items-center footer-menu">
+                            <li class="mb-[5px]"><a title="" target="" class="font-bold text-[18px] duration-300 ease-in hover:cursor-pointer hover:text-primary-orange" aria-label="Careers" href="https://www.icd.ca/about-the-icd/careers">Careers</a></li>
+                            <li class="mb-[5px]"><a title="" target="" class="font-bold text-[18px] duration-300 ease-in hover:cursor-pointer hover:text-primary-orange" aria-label="FAQ" href="https://www.icd.ca/about-the-icd/faq">FAQ</a></li>
+                            <li class="mb-[5px]"><a title="" target="" class="font-bold text-[18px] duration-300 ease-in hover:cursor-pointer hover:text-primary-orange" aria-label="Media Centre" href="https://www.icd.ca/media-centre">Media Centre</a></li>
+                            <li class="mb-[5px]"><a title="" target="" class="font-bold text-[18px] duration-300 ease-in hover:cursor-pointer hover:text-primary-orange" aria-label="Sponsors" href="https://www.icd.ca/about-the-icd/sponsors">Sponsors</a></li>
+                            <li class="mb-[5px]"><a title="" target="" class="font-bold text-[18px] duration-300 ease-in hover:cursor-pointer hover:text-primary-orange" aria-label="Contact" href="https://www.icd.ca/contact">Contact</a></li>
+                        </ul>
+                        <div class="md:mt-xl"><a title="" target="" class="text-sm font-thin tracking-wide duration-300 ease-in cursor-pointer text-light-blue hover:text-primary-orange" aria-label="Privacy Policy" href="https://www.icd.ca/about-the-icd/corporate-governance/policies/privacy-policy">Privacy Policy</a></div>
+                    </div>
+                    <div class="md:hidden mt-md text-center flex flex-col text-xs font-[100]"><span class="text-white"><div>© Copyright Institute of Corporate Directors</div> <!-- --><script type="text/javascript">var year = new Date();document.write(year.getFullYear());</script></span> </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.getElementById("copyright-year").textContent = new Date().getFullYear();
+      </script>
+  </footer>

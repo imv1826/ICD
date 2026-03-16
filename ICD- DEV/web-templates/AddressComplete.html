@@ -1,0 +1,81 @@
+{% assign line1 = line1 | default: "" %}
+{% assign line2 = line2 | default: "" %}
+{% assign city = city | default: "" %}
+{% assign province = province | default: "" %}
+{% assign postalcode = postalcode | default: "" %}
+{% assign country = country | default: "" %}
+{% assign LimitCountry = LimitCountry | default: "" %}
+{% assign ReadOnlyFields = ReadOnlyFields | default: true %}
+{% assign AllowOverride = AllowOverride | default: true %}
+{% assign _Target = _Target | default: "EntityForm" %}
+
+
+{% assign SearchPlaceholder = "Start typing to search your address..." %}
+{% assign CheckboxLabel = "Cannot find Address? Click checkbox to manually enter address." %}
+
+{% if request.url contains 'fr-Fr' %}
+    {% assign SearchPlaceholder = "Commencez à taper pour rechercher votre adresse..." %}
+    {% assign CheckboxLabel = "Adresse introuvable ? Cochez la case pour saisir manuellement l&#39;adresse." %}
+
+{% endif %}
+
+
+{% if line1 != "" %}
+
+    function DisableAddressFields_{{line1}}(show){
+        $("#{{line1}}").prop('readonly', show);
+        $("#{{line2}}").prop('readonly', show);
+        $("#{{city}}").prop('readonly', show);
+        $("#{{province}}").prop('readonly', show);
+        $("#{{postalcode}}").prop('readonly', show);
+        $("#{{country}}").prop('readonly', show);
+    }
+    function manuallEntry_{{line1}}(t) {
+        if (t.is(':checked')) {
+          DisableAddressFields_{{line1}}(false);
+        } else {
+          DisableAddressFields_{{line1}}(true);
+        }
+    }
+
+    {% if _Target == "EntityForm" %} $(function(){ {% endif %}
+
+    (function () {
+        var fields_{{line1}} = [
+
+            { element: "addressCompleteSearch_{{line1}}", field: "" },
+            { element: "{{line1}}", field: "{Line1}", mode: pca.fieldMode.POPULATE },
+            {% if line2 != "" %}{ element: "{{line2}}", field: "{Line2}", mode: pca.fieldMode.POPULATE },{% endif %}
+            {% if city != "" %}{ element: "{{city}}", field: "{City}", mode: pca.fieldMode.POPULATE },{% endif %}
+            {% if province != "" %}{ element: "{{province}}", field: "{ProvinceName}", mode: pca.fieldMode.POPULATE },{% endif %}
+            {% if postalcode != "" %}{ element: "{{postalcode}}", field: "{PostalCode}", mode: pca.fieldMode.POPULATE },{% endif %}
+            {% if country != "" %}{ element: "{{country}}", field: "{CountryName}", mode: pca.fieldMode.COUNTRY }{% endif %}
+        ];
+
+        var options_{{line1}} = {
+                key: "{{settings['AddressComplete/Key']}}",
+                {% if LimitCountry != "" %}countries: { codesList: "{{LimitCountry}}" , prepopulate: true }, {%endif%}
+                bar: {
+                    showCountry: true,
+                    showLogo: true,
+                    logoLink: false
+                }
+        };
+
+        $('<tr><td colspan="2" rowspan="1" class="clearfix cell text form-control-cell"><input type="text" name="addressCompleteSearch_{{line1}}" id="addressCompleteSearch_{{line1}}" class="text form-control" placeholder="{{SearchPlaceholder}}"   aria-label="{{SearchPlaceholder}}"></td></tr>').insertBefore( $("#{{country}}").closest('tr'));
+
+        {% if  AllowOverride and ReadOnlyFields %}
+            $('<div class="help-block"><div><label style="font-weight: normal;"><input onclick="manuallEntry_{{line1}}($(this));" type="checkbox" id="override_{{line1}}" aria-label="{{SearchPlaceholder}}"> {{CheckboxLabel}}</label></div></div>').insertAfter("#addressCompleteSearch_{{line1}}");
+        {% endif %}
+
+
+        {% if ReadOnlyFields %}
+        DisableAddressFields_{{line1}}(true);
+        {% endif %}
+
+        var control_{{line1}} = new pca.Address(fields_{{line1}}, options_{{line1}});
+    })();
+
+    {% if _Target == "EntityForm" %} }); {% endif %}
+
+{% endif %}

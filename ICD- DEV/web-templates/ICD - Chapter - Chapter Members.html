@@ -1,0 +1,19 @@
+{% include 'Default studio template'%}
+{% assign bmID = request.params['id' ] | default: "" %}
+{% block main %}
+
+  <div class="container" style="display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout"
+      style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">  
+      {%if request.path contains "fr-Fr"%}
+      <h2>Informations sur le chapitre</h2>
+      {%else%}
+      <h2>Chapter Information</h2>
+      {%endif%}
+        {% entityform name: 'zPortal - Chapter Members' %}
+    </div>
+  </div>
+
+
+
+{% endblock %}

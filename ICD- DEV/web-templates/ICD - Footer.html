@@ -1,0 +1,190 @@
+<div style="background-color: #ebeaea; color: black; padding: 12px 16px; width: 40%; margin: 20px auto; border-radius: 6px; text-align: left; font-size: 0.95em; line-height: 1.6;">
+  <strong style="display: block; margin-bottom: 8px; color: black; font-size: 1.05em; letter-spacing: 1px; font-weight: 600;">
+
+    {% if page.url == "/My-Events/" %}
+<h3 style="margin:0; font-size:1.05em; font-weight:600; letter-spacing:0.5px; color:#000000; font-weight:bold;">
+  Need Assistance?</h3>
+<p style="color:#000000; font-size:0.95em; margin:4px 0 0 0; text-align:left;">
+  If you have any questions or require support, contact us at events@icd.ca or call 1-877-593-7741.
+</p>
+    {% elsif page.url == "/My-Courses/" %}
+        <h3 style="margin:0; font-size:1.05em; font-weight:600; letter-spacing:0.5px; color:#000000; font-weight:bold;">
+  Need Assistance?</h3>
+<p style="color:#000000; font-size:0.95em; margin:4px 0 0 0; text-align:left;">
+  If you have any questions or require support, contact us at education@icd.ca or call 1-877-593-7741.
+</p>
+    {% else %}
+<h3 style="margin:0; font-size:1.05em; font-weight:600; letter-spacing:0.5px; color:#000000; font-weight:bold;">
+  Need Assistance?</h3>
+<p style="color:#000000; font-size:0.95em; margin:4px 0 0 0; text-align:left;">
+  If you have any questions or require support, contact us at membership@icd.ca or call 1-877-593-7741.
+</p>
+    {% endif %}
+  </strong>
+</div>
+<footer role="contentinfo">
+  {% include 'fetchXML - ClearPortalCache' %}
+    <div hidden>{{ClearPortalCache.results.entities.size}}</div>
+  <div class="footer-bottom d-print-none">
+    <div class="container">
+      <div class="row grid__icdFooter">
+        <div class="icdFooterParentWrapper" data-weblinks-maxdepth="2">
+            <div class="icdlogostyling">
+                <div class="icdFooterImage" >
+                    {% if snippets['ICD/Footer/Logo'] %}<img src='{{ snippets['ICD/Footer/Logo'] }}' alt='{{ snippets['Footer Logo alt text'] }}' >{% endif %}
+                </div>
+                <div class="icdlogostylinglinks" >
+                    {{ snippets['ICD/Footer/ICDChapterNetwork/Button'] }}
+                    {{ snippets['ICD/Footer/ICDDirectorsRegister/Button'] }}
+                </div>
+            </div>
+          <div class="icdlogostyling" >
+            <div class="icdlogostylinglinks" >
+                <div class="icdfoterAddressLinkedInSection">
+                  <div class="icdParentphonenumberdiv">
+                    <strong class="icdfooterphonenumber">{{ snippets['ICD/Footer/PhoneNumber/Text'] }}</strong>
+                    <div class="icdfooteraddress">{{ snippets['ICD/Footer/Address/Text'] }}</div>
+                  </div>
+                  <div class="icdParentLinkedIndiv">
+                    <a href="https://www.linkedin.com/company/icdcanada/" aria-label="linkedin" >
+                      <span class="icdLinkedinLogo"> 
+                        <i class="fa-brands fa-linkedin-in" href="https://www.linkedin.com/company/icdcanada/" ></i>
+                      </span>
+                    </a>
+                  </div>
+                </div>
+            </div>
+            <div class="icdlogostylinglfooterweblinks icdFooterLinks" >
+                <ul class="list-unstyled navbar-nav">
+                    <li role="none" class="footer-list" style="flex: 2 1 0px;">
+                        {% assign primary_nav = weblinks['Footer'] %}
+                        {% if primary_nav %}
+                            {% for link in primary_nav.weblinks %}
+                                {% if link.display_page_child_links %}
+                                    {% if link.url != null %}
+                                        {% assign sublinks = sitemap[link.url].children %}
+                                    {% endif %}
+                                {% else %}
+                                    {% assign sublinks = link.weblinks %}
+                                {% endif %}
+                                <li class='nav-item weblink {% if sublinks.size > 0 %} dropdown{% endif %}'>
+                                    <a aria-label='{{ link.name | escape }}' {% if sublinks.size > 0 -%} href='#' role='button' class='dropdown-toggle nav-link' data-bs-toggle='dropdown' {%- else -%} class='nav-link footer-links' href='{{ link.url | escape }}' aria-roledescription='link'
+                                        {%- endif -%} {%- if link.Open_In_New_Window %} target='_blank' {% endif -%} {%- if link.nofollow %} rel='nofollow' {% endif -%} {%- if link.tooltip %} title='{{ link.tooltip | escape }}' {% endif %}>
+                                        {%- if link.image -%}
+                                            {%- if link.image.url -%}
+                                                {%- if link.image.url.first == '.' -%}
+                                                    <span class='{{ link.image.url | split:'.' | join }}' aria-hidden='true'></span>
+                                                {%- endif -%}
+                                            {%- else -%}
+                                                <img
+                                                    src='{{ link.image.url | escape }}'
+                                                    alt='{{ link.image.alternate_text | default:link.tooltip | escape }}'
+                                                    {% if link.image.width %}
+                                                    width='{{ link.image.width | escape }}'
+                                                    {% endif %}
+                                                    {% if link.image.height %}
+                                                    height='{{ link.image.height | escape }}'
+                                                    {% endif %}
+                                                >
+                                            {%- endif -%}
+                                        {%- endif -%}
+                                        {%- unless link.display_image_only -%}
+                                            {{ link.name | escape }}
+                                        {%- endunless -%}
+                                        {%- if sublinks.size > 0 -%}
+                                        {%- endif -%}
+                                    </a>
+                                </li>
+                            {% endfor %} 
+                        {% endif %}
+                    </li>
+                </ul>
+            </div>
+        </div>
+      </div>
+      <div class="footercopyright">
+        <div>
+          {{ snippets['ICD/Footer/PrivacyPolicy/Link'] }}
+        </div>
+        <div>
+          {% editable snippets 'Footer' type: 'html' %}
+        </div>
+      </div>
+      <div id="accessibilityLinkContainer" class="col-lg-3 col-md-3 col-sm-3 text-end">
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script type="text/javascript">
+if (window.jQuery) {
+    (function ($) {
+        $(document).ready(function () {
+          $('a[class*="adx_"]').each(function () {
+            if (!$(this).attr('aria-label')) {
+              $(this).attr('aria-label', 'aria_label');
+            }
+          });
+          $('textarea.form-control').each(function () {
+            if (!$(this).attr('aria-label')) {
+              $(this).attr('aria-label', 'aria_label');
+            }
+          });
+          $('input.form-control').each(function () {
+            if (!$(this).attr('aria-label')) {
+              $(this).attr('aria-label', 'aria_label');
+            }
+          });
+          $('label.col-form-label').each(function () {
+            if (!$(this).attr('aria-label')) {
+              $(this).attr('aria-label', 'aria_label');
+            }
+          });
+          $('select[style*="display: none"]').each(function () {
+            if (!$(this).attr('aria-label')) {
+              $(this).attr('aria-label', 'aria_label');
+            }
+          });
+          $('h3.form-subgrid-heading').each(function () {
+            if ($.trim($(this).text()) === '') {
+              $(this).remove();
+            }
+          });
+        });
+    })(window.jQuery);
+}
+</script>
+
+<script type="text/javascript">
+  window.onload = function() {
+    const accessibilityLinkContainer = document.getElementById("accessibilityLinkContainer");
+    switch(window.navigator.language) {
+      case "fr":
+        if (accessibilityLinkContainer != null) {
+          const accessibilityText="Accessibilité : partiellement conforme";
+          const frenchAccessibilityAnchor = document.createElement("a");
+          frenchAccessibilityAnchor.id = "frenchAccesssibleLink";
+          frenchAccessibilityAnchor.target = "_blank";
+          frenchAccessibilityAnchor.href = "https://go.microsoft.com/fwlink/?linkid=2163806";
+          frenchAccessibilityAnchor.title = accessibilityText;
+          frenchAccessibilityAnchor.innerText = accessibilityText;
+          accessibilityLinkContainer.appendChild(frenchAccessibilityAnchor);
+        }
+        break;
+      case "it":
+        if (accessibilityLinkContainer != null) {
+          const accessibilityText="Accessibilità: parzialmente conforme";
+          const italianAccessibilityAnchor = document.createElement("a");
+          italianAccessibilityAnchor.id = "italianAccesssibleLink";
+          italianAccessibilityAnchor.target = "_blank";
+          italianAccessibilityAnchor.href = "https://go.microsoft.com/fwlink/?linkid=2208177";
+          italianAccessibilityAnchor.title = accessibilityText;
+          italianAccessibilityAnchor.innerText = accessibilityText;
+          accessibilityLinkContainer.appendChild(italianAccessibilityAnchor);
+        }
+        break;
+      default: 
+        accessibilityLinkContainer.remove();
+    }
+  };
+ </script>

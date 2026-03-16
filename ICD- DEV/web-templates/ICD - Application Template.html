@@ -1,0 +1,374 @@
+{% assign formType = request.params['formtype' ] %}
+{% assign prodId = request.params['prodId' ] | default: "" %}
+{% assign eventId = request.params['eventId' ] | default: "" %}
+{% assign sessionType = request.params['sessionType' ] | default: "" %}
+{% assign recordSubType = request.params['recordType' ] | default: "" %}
+{% assign fellowshipId = request.params['FellowShip' ] | default: "" %}
+{% assign DeferedAppID = request.params['DeferedAppID' ] | default: "" %}
+
+{% assign audienceEligible = false %}
+{% assign membershipStatus = 0 %}
+{% assign publishStatus = null %}
+{% assign recordType = null %}
+{% assign registrationCount = 0 %}
+{% assign maxCapacity = 0 %}
+{% assign eventAudienceType = 0 %}
+{% assign eventAudienceTypeErrorMessage = "" %}
+{% assign waitingListEnabled = false %}
+{% if eventId %}
+    {% assign event = entities['msevtmgt_event'][eventId] %}
+    {% assign publishStatus = event.msevtmgt_publishstatus.value %}
+    {% assign recordType = event.icd_recordtype.value %}
+    {% assign registrationCount = event.msevtmgt_registrationcount %}
+    {% assign maxCapacity = event.msevtmgt_maximumeventcapacity %}
+    {% assign waitingListEnabled = event.icd_waitinglist %}
+    {% assign eventAudienceType = event.icd_audiencetype.value %}
+    {% assign current_date = now | date: 'yyyyMMddHHmm' %}
+    {% assign timezone_number = event.msevtmgt_eventtimezone | default: 0 %}
+    {% fetchxml timezone_query %}
+    <fetch top="1">
+    <entity name="timezonedefinition">
+        <attribute name="bias" />
+        <attribute name="standardname" />
+        <filter>
+        <condition attribute="timezonecode" operator="eq" value="{{ timezone_number }}" />
+        </filter>
+    </entity>
+    </fetch>
+    {% endfetchxml %}
+    {% assign timezone_result = timezone_query.results.entities[0] %}
+
+
+    {% if timezone_result %}
+        {% assign bias_minutes = timezone_result.bias | plus: 0 %}
+        {% assign utc_offset = bias_minutes | times: 1 | divided_by: 60 %}
+        {% comment %}
+            <p>initial offset is : {{ utc_offset }}</p>
+            <p>Time zone: {{ timezone_result.standardname }}</p>
+            <p>the bias is {{bias_minutes }}</p>
+            <p>UTC offset (hours): {% if utc_offset >= 0 %}+{% endif %}{{ utc_offset }}</p>
+        
+                else
+        <p>Unknown time zone for code: {{ timezone_number }}</p>
+        {% endcomment %}
+    {% endif %}
+        {% comment %}
+            <br>Event date is {{event.msevtmgt_setregistrationsenddate   }}
+            <br>current_date is {{current_date }}
+        {% endcomment %}
+    {% if event.msevtmgt_setregistrationsenddate %}
+        {% assign stopRegistrationDateTemp = event.msevtmgt_stopwebsiteregistrationson | date_add_hours: utc_offset%}
+        {% assign stopRegistrationDate = stopRegistrationDateTemp | date: 'yyyyMMddHHmm'%}
+         {% comment %}
+            <br>INitial date is  = {{event.msevtmgt_stopwebsiteregistrationson }}
+            <br>first test - stopRegistrationDate = {{stopRegistrationDateTemp }}
+            <br>2nd test - stopRegistrationDate = {{stopRegistrationDate }}
+        {% endcomment %}
+    {% else %}
+        {% assign stopRegistrationDatetemp = event.msevtmgt_eventstartdate | date_add_hours: utc_offset| date_add_minutes : -10 %}
+        {% assign stopRegistrationDate = stopRegistrationDatetemp | date: 'yyyyMMddHHmm'%}
+
+ 
+    {% endif %}
+
+{% endif %}
+
+{% include 'ICD - CSS'%}
+{% include 'ICD - Modal'%}
+{% assign currentContactRec = entities['contact'][user.id] %}
+{% include 'ICD Helper - WebAPI Wrapper AJAX' %}
+{% assign is_delegate_user = currentContactRec.icd_isdelegateuser | default: false %}
+{% assign delegateMember = null %}
+{% if is_delegate_user %}
+    {% fetchxml delegateMember_fetch %}
+    <fetch top="1">
+    <entity name="contact">
+        <attribute name="contactid" />
+        <filter>
+        <condition attribute="icd_delegateuser" operator="eq" value="{{  user.id }}" />
+        </filter>
+    </entity>
+    </fetch>
+    {% endfetchxml %}
+    {% if delegateMember_fetch.results.entities.size > 0 %}
+        {% assign first_contact = delegateMember_fetch.results.entities[0] %}
+        {% assign delegateMember = entities['contact'][first_contact.contactid] %}
+        {%comment %}
+        Get membership status of owner of application
+        {% endcomment %}
+        {% assign membershipStatus = delegateMember.icd_membershipstatus.value %}
+
+    {% else %}
+        No Contact found with the given Delegate User ID.
+    {% endif %}
+{% else %}
+    {% assign membershipStatus = currentContactRec.icd_membershipstatus.value %}
+{% endif %}
+
+
+
+{%comment %}
+Event AudienceType
+{% endcomment %}
+{% if eventAudienceType == 100000002 %}
+    {% if membershipStatus == 100000003 or membershipStatus == 100000006 or membershipStatus == 100000008 or membershipStatus == 100000010 %}
+        {% assign audienceEligible = true %}
+    {% else %}
+        {% assign eventAudienceTypeErrorMessage = "Application/Event/AudienceErrorMsg/ICDDMemberOnlyEvent" %}
+    {% endif %}
+{% elsif eventAudienceType == 100000000 %}
+    {% if membershipStatus == 100000002 or membershipStatus == 100000003 or membershipStatus == 100000004 or membershipStatus == 100000005 or membershipStatus == 100000006 or membershipStatus == 100000007 or membershipStatus == 100000008 or membershipStatus == 100000010 %}
+        {% assign audienceEligible = true %}
+    {% else %}
+        {% assign eventAudienceTypeErrorMessage = "Application/Event/AudienceErrorMsg/MemberOnlyEvent" %}
+    {% endif %}
+{% elsif eventAudienceType == 100000004 %}
+    {% if membershipStatus == 100000001 or membershipStatus == 100000003 or membershipStatus == 100000006 or membershipStatus == 100000008 %}
+        {% assign audienceEligible = true %}
+    {% else %}
+        {% assign eventAudienceTypeErrorMessage = "Application/Event/AudienceErrorMsg/MemberAll-CourseElearning" %}
+    {% endif %}	
+{% else %}
+    {% assign audienceEligible = true %}
+{% endif %}
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-labelledby="loadingModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body text-center">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Generating your form, please wait...</p>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="timedAlert" class="mt-2 alert alert-info text-center d-none" role="alert">Generating your form!</div>
+
+
+
+{% if formType and user %}
+    {% assign current_contact_id = user.id %}
+    <script type="text/javascript">
+    $(window).on('load', function () {
+        console.log("on Load function");
+        {% if eventId != "" %}
+            {% if audienceEligible == false%}
+                AlertPopup(  `{{ snippets[eventAudienceTypeErrorMessage] }}`, "OK", function() {
+                    window.location.href = "{{ snippets['Link/ICD.CA'] }}";
+                });
+            {% elseif  stopRegistrationDate <= current_date and formType != "648996bd-2ef9-ef11-bae1-6045bdf9994e" %}
+                AlertPopup( "{{ snippets['Application/EventApplication/RegistrationDateExpired'] }}", "OK", function() {
+                    window.location.href = "{{ snippets['Link/ICD.CA'] }}";
+                });
+            {% elseif publishStatus == 100000003 and waitingListEnabled and registrationCount >= maxCapacity and formType != "648996bd-2ef9-ef11-bae1-6045bdf9994e"%}
+                //type of waitlist - eitehr course or event waitlist
+                {% if recordType == 100000001 %}
+                {% assign formType = "fbf3ae1f-88dd-ef11-a730-6045bdf9be70" %}
+                {% elsif recordType == 100000000 %}
+                {% assign formType = "f7009422-d4f9-ef11-bae2-7c1e5206390e" %}
+                {% endif %}
+
+                showConfirmationModal("Join Waitlist", 
+                    "The registration for this event is full. Would you like to join the waitlist?",
+                    "Join Waitlist",
+                    "Cancel", 
+                    function() { createApplicationRecord(); },
+                    function() { window.location.href = "{{ snippets['Link/ICD.CA'] }}"}
+                );
+            
+            {% elseif  publishStatus == 100000003 and registrationCount < maxCapacity %}
+                createApplicationRecord(); 
+                
+            {% elseif  formType == "648996bd-2ef9-ef11-bae1-6045bdf9994e" %} // for deferel event
+                createApplicationRecord();
+
+            {% else %}
+                AlertPopup( "{{ snippets['Application/EventApplication/EventFull'] }}", "OK", function() {
+                    window.location.href = "{{ snippets['Link/ICD.CA'] }}";
+                });
+            {% endif %}
+        {% else %}
+            createApplicationRecord();
+        {% endif %}
+    });
+
+        var formType = "{{formType}}";
+        var currentContactId = "{{ current_contact_id }}";
+
+        //function to show or hide message
+        function showTimedAlert(message) {
+            const alertElement = document.getElementById('timedAlert');
+            alertElement.textContent = message; // Set the alert message
+            alertElement.style.display = 'block'; // Show the alert
+            alertElement.classList.add('show'); // Add Bootstrap show class for animation
+            alertElement.classList.remove('d-none');
+
+            // Set a timeout to hide the alert after 5 seconds
+            setTimeout(function () {
+            alertElement.classList.remove('show'); // Hide the alert
+            alertElement.style.display = 'none'; // Hide with inline style
+            },
+            5000); // 5000ms = 5 seconds
+        }
+
+        function createApplicationRecord() {
+
+            var selfPurchase = true;
+            {% if is_delegate_user == true %}
+                selfPurchase = false;
+            {% endif %}
+
+            $('#loadingModal').modal('show');
+
+            // Check if the contact ID is available
+            if (!currentContactId) {
+                showTimedAlert(' please try again');
+                console.log("Current contact ID is not available.");
+                window.location.href = "/";
+                return;
+            }
+            console.log(currentContactId);
+            var newApplication;
+
+            // Create a new application record linked to the current contact
+            {% if is_delegate_user == true %}
+                newApplication = generateDataDelegateUser();
+            {% else %}
+                newApplication = generateDataSelfPurchase();
+            {% endif %}
+
+            console.log("creating record");
+            webapi.safeAjax({
+                type: "POST",
+                contentType: "application/json",
+                url: "/_api/icd_applications",
+                data: JSON.stringify(newApplication),
+                success: function (data, textStatus, xhr) {
+                    //$('#loadingModal').modal('hide');
+                    // Upon successful creation, retrieve the ID of the new Multipayment Array
+                    var newApplicationID = xhr.getResponseHeader("entityid"); // Assuming entityid is returned in the response header
+                    console.log("Created Application Array ID: " + newApplicationID);
+                    // Redirect the user
+                    window.location.href = "/Application-Form/?id=" + newApplicationID
+                },
+                error: function (xhr, textStatus, errorThrown) {
+                    $('#loadingModal').modal('hide');
+                    showAlert('error', errorThrown);
+                    // Display error message
+                    console.log("error is " + xhr + "," + textStatus + "," + errorThrown);
+                }
+            });
+        }
+
+
+        // Function to add property to newApplication only if the value is not empty or null
+        function generateDataDelegateUser() {
+            var newApplication = {
+            "icd_AppType@odata.bind": "/icd_applicationtypes(" + formType + ")",
+            "icd_Contact@odata.bind": "/contacts({{delegateMember.contactid}})",
+
+            "icd_DelegateUser@odata.bind": "/contacts({{user.id}})",
+
+            {% if eventId != "" %}
+                "icd_Registrationfor@odata.bind": "/msevtmgt_events({{eventId}})",
+                "icd_FirstChoiceOffering@odata.bind": "/msevtmgt_events({{eventId}})",
+                "icd_deliverymethod": {{ event.icd_deliverymethod.value }},
+                {% if event.msevtmgt_registrationcount >= event.msevtmgt_maximumeventcapacity and event.msevtmgt_maximumeventcapacity != 0 %}
+                    "icd_waitinglist": true,
+                {% endif %}
+            {% endif %}
+
+            {%if sessionType != "" %}
+                "icd_sessiontype": {{ sessionType }},
+            {% endif %}
+            {%if recordSubType != "" %}
+                "icd_recordsubtype": {{ recordSubType }},
+            {% endif %}
+
+            {% if fellowshipId != "" %}
+                "icd_FellowshipAward@odata.bind": "/icd_fellowshipawards({{fellowshipId}})",
+            {% endif %}
+            };
+
+            // Function to add properties only if the value is not empty or null
+            function addIfNotEmpty(key, value) {
+                if (value !== null && value !== "" && value !== undefined) {
+                    newApplication[key] = value;
+                }
+            }
+
+            // Add properties conditionally
+            addIfNotEmpty("icd_firstname", "{{ delegateMember.firstname }}");
+            addIfNotEmpty("icd_lastname", "{{ delegateMember.lastname }}");
+            addIfNotEmpty("icd_email", "{{ delegateMember.emailaddress1 }}");
+            addIfNotEmpty("icd_city", "{{ delegateMember.address1_city }}");
+            addIfNotEmpty("icd_line1", "{{ delegateMember.address1_line1 }}");
+            addIfNotEmpty("icd_line2", "{{ delegateMember.address1_line2 }}");
+            addIfNotEmpty("icd_postalcode", "{{ delegateMember.address1_postalcode }}");
+            addIfNotEmpty("icd_preferredphonenumber", "{{ delegateMember.mobilephone }}");
+            addIfNotEmpty("icd_stateorprovince", "{{ delegateMember.address1_stateorprovince }}");
+            addIfNotEmpty("icd_country", "{{ delegateMember.address1_county }}");
+            addIfNotEmpty("icd_accommodations", "{{ delegateMember.icd_accommodations }}");
+            addIfNotEmpty("icd_age", "{{ delegateMember.icd_age }}");
+            addIfNotEmpty("icd_designatedgroups", "{{ delegateMember.icd_designatedgroups }}");
+            addIfNotEmpty("icd_dietaryrestrictions", "{{ delegateMember.icd_dietaryrestrictions }}");
+            addIfNotEmpty("icd_gender", "{{ delegateMember.icd_gender }}");
+            addIfNotEmpty("icd_languagepreference", "{{ delegateMember.icd_languagepreference }}");
+            addIfNotEmpty("icd_taxexemptionnumber", "{{ delegateMember.icd_taxexemptionnumber }}");
+            addIfNotEmpty("icd_company", "{{ delegateMember.adx_organizationname }}");
+            addIfNotEmpty("icd_industry", "{{ delegateMember.icd_industry }}");
+            addIfNotEmpty("icd_position", "{{ delegateMember.icd_position }}");
+            addIfNotEmpty("icd_professionaldesignations", "{{ delegateMember.icd_professionaldesignations }}");
+            addIfNotEmpty("icd_directorjourneystage", "{{ delegateMember.icd_directorjourneystage }}");
+            addIfNotEmpty("icd_caslcompliance", "{{ delegateMember.icd_caslcomplianceconsent }}");
+            addIfNotEmpty("icd_jobtitle", "{{ delegateMember.jobtitle }}");
+            addIfNotEmpty("icd_middleinitial", "{{ delegateMember.middlename }}");
+            addIfNotEmpty("icd_prefix", "{{ delegateMember.icd_prefix }}");
+            addIfNotEmpty("icd_pronoun", "{{ delegateMember.icd_pronoun }}");
+
+            return newApplication;
+        }
+
+
+
+        function generateDataSelfPurchase() {
+            var newApplication = {
+                "icd_AppType@odata.bind": "/icd_applicationtypes(" + formType + ")",
+                "icd_Contact@odata.bind": "/contacts(" + currentContactId + ")",
+                {% if eventId != "" %}
+                    "icd_Registrationfor@odata.bind": "/msevtmgt_events({{eventId}})",                    
+                    "icd_FirstChoiceOffering@odata.bind": "/msevtmgt_events({{eventId}})",
+                    "icd_deliverymethod": {{ event.icd_deliverymethod.value }},
+                    {% if event.msevtmgt_registrationcount >= event.msevtmgt_maximumeventcapacity and event.msevtmgt_maximumeventcapacity != 0 %}
+                        "icd_waitinglist": true,
+                    {% endif %}
+                {% endif %}
+                {% if fellowshipId != "" %}
+                    "icd_FellowshipAward@odata.bind": "/icd_fellowshipawards({{fellowshipId}})",
+                {% endif %}
+                {%if sessionType != "" %}
+                    "icd_sessiontype": {{ sessionType }},
+                {% endif %}
+                {%if recordSubType != "" %}
+                    "icd_recordsubtype": {{ recordSubType }},
+                {% endif %}
+
+                {% if DeferedAppID !="" %} // for deferel event
+                  "icd_ApplicationDeferredFrom@odata.bind":"/icd_applications({{DeferedAppID}})",
+
+                {% endif %}
+                "icd_firstname": "{{ user.firstname }}",
+                "icd_lastname": "{{ user.lastname }}",
+                "icd_email": "{{ user.emailaddress1 }}"
+            };
+            return newApplication
+        }
+
+    </script>
+{% endif %}
+
+
+{% include 'Default studio template' %}

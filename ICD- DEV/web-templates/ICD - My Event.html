@@ -1,0 +1,195 @@
+{% extends 'Layout 1 Column' %}
+
+{% block main %}
+{% assign manageEventCount = 0 %}
+{% assign manageTablesCount = 0 %}
+{% assign upcomingEventCount = 0 %}
+{% assign completedEventCount = 0 %}
+{% assign manageEventTablesCount = 0 %}
+{% assign current_url = request.path %}
+{% assign currentUserId = user.id | downcase %}
+{% assign isTableManager = false %}
+
+<!-- Assigning count of each view -->
+{% entityview id:"896f00a3-28b7-ef11-a72f-6045bdf9b7fa", page:1 %}
+  {% assign manageEventCount = entityview.total_records %}
+{% endentityview %}
+
+{% entityview id:"51f612b8-a8f7-ef11-bae2-6045bdf9b61a", page:1 %}
+  {% assign manageTablesCount = entityview.total_records %}
+{% endentityview %}
+
+<!-- Check if Table Manager is Logged in User -->
+{% entityview id:"ef1f6d3d-6d5e-f011-877a-7c1e5206390e", page:1 %}
+  {% for record in entityview.records %}
+    {% if record.icd_tablemanager %}
+      {% assign tableManagerId = record.icd_tablemanager.id | downcase %}
+      {% if currentUserId == tableManagerId %}
+        {% assign isTableManager = true %}
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+{% endentityview %}
+
+{% entityview id:"ef1f6d3d-6d5e-f011-877a-7c1e5206390e", page:1 %}
+  {% assign manageEventTablesCount = entityview.total_records %}
+{% endentityview %}
+
+{% entityview id:"6eaffdee-eabb-ef11-a72e-6045bdf9be70", page:1 %}
+  {% assign upcomingEventCount = entityview.total_records %}
+{% endentityview %}
+
+{% entityview id:"28e59fe2-ebbb-ef11-a72e-6045bdf9b7fa", page:1 %}
+  {% assign completedEventCount = entityview.total_records %}
+{% endentityview %}
+
+{% if current_url contains 'fr-Fr' %}
+{% if manageEventCount > 0 %}
+<!-- Manage Events Section -->
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="padding: 0px; display: flex; flex-wrap: wrap; column-gap: 0px;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; margin: 0px; padding: 16px; justify-content: center; width: calc(100% + 0px);">
+      <h2 style="text-align: left;">{{ snippets["MyEvents/ManageMyEvents"] }}</h2>
+    </div>
+  </div>
+</div>
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px; position: relative;">
+  <div class="container" style="display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 0px; justify-content: center;">
+      {% include 'entity_list' key: 'Manage My Event Fr' %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if manageEventTablesCount > 0 %}
+<!-- Manage Tables Section Newly Added -->
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="padding: 0px; display: flex; flex-wrap: wrap; column-gap: 0px;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; margin: 0px; padding: 16px; justify-content: center; width: calc(100% + 0px);">
+      <h2 style="text-align: left;">{{ snippets["MyEvents/ManageTables"] }}</h2>
+    </div>
+  </div>
+</div>
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px; position: relative;">
+  <div class="container" style="display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 0px; justify-content: center;">
+      {% include 'entity_list' key: 'Manage My Event Table - Table Manager' %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if upcomingEventCount > 0 %}
+<!-- Upcoming Events Section -->
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="padding: 0px; display: flex; flex-wrap: wrap; column-gap: 0px;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; margin: 0px; padding: 16px; justify-content: center; width: calc(100% + 0px);">
+      <h2 style="text-align: left;">{{ snippets["MyEvents/UpcomingEvents"] }}</h2>
+    </div>
+  </div>
+</div>
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px; position: relative;">
+  <div class="container" style="display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 0px; justify-content: center;">
+      {% include 'entity_list' key: 'My Upcoming Events Fr' %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+
+
+{% if completedEventCount > 0 %}
+<!-- Completed Events Section -->
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="padding: 0px; display: flex; flex-wrap: wrap; column-gap: 0px;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; margin: 0px; padding: 16px; justify-content: center; width: calc(100% + 0px);">
+      <h2 style="text-align: left;">{{ snippets["MyEvents/CompletedEvents"] }}</h2>
+    </div>
+  </div>
+</div>
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px; position: relative;">
+  <div class="container" style="display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 0px; justify-content: center;">
+      {% include 'entity_list' key: 'My Completed Event Fr' %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% else %}
+  {% if manageEventCount > 0 %}
+    <!-- Manage Events Section -->
+    <div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+      <div class="container" style="padding: 0px; display: flex; flex-wrap: wrap; column-gap: 0px;">
+        <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; margin: 0px; padding: 16px; justify-content: center; width: calc(100% + 0px);">
+          <h2 style="text-align: left;">{{ snippets["MyEvents/ManageMyEvents"] }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px; position: relative;">
+      <div class="container" style="display: flex; flex-wrap: wrap;">
+        <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 0px; justify-content: center;">
+          {% include 'entity_list' key: 'Manage My Event' %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  
+{% if manageEventTablesCount > 0 %}
+<!-- Manage Tables Section Newly Added -->
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="padding: 0px; display: flex; flex-wrap: wrap; column-gap: 0px;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; margin: 0px; padding: 16px; justify-content: center; width: calc(100% + 0px);">
+      <h2 style="text-align: left;">{{ snippets["MyEvents/ManageTables"] }}</h2>
+    </div>
+  </div>
+</div>
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px; position: relative;">
+  <div class="container" style="display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 0px; justify-content: center;">
+      {% include 'entity_list' key: 'Manage My Event Table - Table Manager' %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+  {% if upcomingEventCount > 0 %}
+    <!-- Upcoming Events Section -->
+    <div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+      <div class="container" style="padding: 0px; display: flex; flex-wrap: wrap; column-gap: 0px;">
+        <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; margin: 0px; padding: 16px; justify-content: center; width: calc(100% + 0px);">
+          <h2 style="text-align: left;">{{ snippets["MyEvents/UpcomingEvents"] }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px; position: relative;">
+      <div class="container" style="display: flex; flex-wrap: wrap;">
+        <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 0px; justify-content: center;">
+          {% include 'entity_list' key: 'My Upcoming Events' %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if completedEventCount > 0 %}
+    <!-- Completed Events Section -->
+    <div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+      <div class="container" style="padding: 0px; display: flex; flex-wrap: wrap; column-gap: 0px;">
+        <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; margin: 0px; padding: 16px; justify-content: center; width: calc(100% + 0px);">
+          <h2 style="text-align: left;">{{ snippets["MyEvents/CompletedEvents"] }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px; position: relative;">
+      <div class="container" style="display: flex; flex-wrap: wrap;">
+        <div class="col-lg-12 columnBlockLayout" style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 0px; justify-content: center;">
+          {% include 'entity_list' key: 'My Completed Event' %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endif %}
+
+{% endblock %}

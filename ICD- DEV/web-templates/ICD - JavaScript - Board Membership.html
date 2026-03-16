@@ -1,0 +1,269 @@
+{% assign AppID = request.params['id' ] | default: "" %}
+{% include 'ICD - Modal'%}
+{% if entities.icd_application[AppID].icd_organizationsizebyrevenue.id != null%}
+    {% assign OrgSize = entities.icd_application[AppID].icd_organizationsizebyrevenue.id%}
+    {% assign Product = entities.icd_organizationsizebyrevenue[OrgSize].icd_product.id%}
+    {% assign ProductPrice = entities.product[Product].price%}
+    {% assign additionalProduct = entities.icd_organizationsizebyrevenue[OrgSize].icd_additionalproduct.id%}
+    {% assign additionalProductPrice = entities.product[additionalProduct].price%}
+{% endif %}
+
+<script>
+ 
+    $(window).on('load', function () {
+        //additional price per additional board member 
+        var Additionalprice = 0; 
+        var productPrice = 0;
+        {% if Product != null and ProductPrice != null%}
+            productPrice = {{ProductPrice}};
+        {% endif %}
+        {% if additionalProduct != null and additionalProductPrice != null%}
+            Additionalprice = {{additionalProductPrice}};
+        {% endif %}
+        var numberOfBoardMembers = 0;
+        $('#icd_account').closest('td').hide();
+        // Find the div with data-name="CompanyInformation "
+        var div = $('div[data-name="CompanyInformation"]');
+
+        // Find the table inside this div
+        var table = div.find('table');
+
+        //  Create the  new row content
+        var newRow = `<tr>
+                    <td colspan="2" rowspan="1" class="clearfix cell text form-control-cell">
+                    <input type="text" name="companyInfoCompleteSearch" id="companyInfoCompleteSearch"
+                        class="text form-control mt-3" placeholder="{{ snippets["Application/AccountLookup/Typing"] }}"
+                        autocomplete="pca-override" aria-label="companyInfoCompleteSearch">
+                        <div class="help-block">
+                        <div>
+                            <label style="font-weight: normal;">
+                            <input onclick="" type="checkbox" id="override_icdCompanyName">
+                                {{ snippets["Application/AccountLookup/Checkbox"] }}
+                            </label>
+                        </div>
+                        </div>
+                    </td>
+                </tr>`;
+
+        // Prepend the new row to the table body
+        table.find('tbody').prepend(newRow);
+
+        //START code to grey our COMPANY field------------------------->
+        $('#override_icdCompanyName').on('change', function () {
+            const fieldsToHandle = [
+                '#icd_companyname',
+                '#icd_typeofcompany',
+                '#icd_industry',
+                '#icd_organizationsizebyrevenue',
+                '#icd_monthofagm'
+            ];
+
+            if ($(this).is(':checked')) {
+                // ✅ Enable fields and remove grey background
+                fieldsToHandle.forEach(function (selector) {
+                    const field = $(selector);
+                    field.removeAttr('style'); // Clear inline styles first
+
+                    if (field.is('select')) {
+                        field.css('pointer-events', 'auto');
+                    } else {
+                        field.removeAttr('readonly');
+                    }
+                });
+            } else {
+                // 🚫 Disable fields and apply grey background
+                fieldsToHandle.forEach(function (selector) {
+                    const field = $(selector);
+
+                    if (field.is('select')) {
+                        // Prevent interaction, keep field submittable
+                        field.css('pointer-events', 'none');
+                    } else {
+                        field.attr('readonly', 'readonly');
+                    }
+
+                    // Apply strict grey background
+                    field.attr('style', function (_, style) {
+                        return (style || '') + 'background-color: #f2f2f2 !important;';
+                    });
+                });
+            }
+        });
+
+
+        // Trigger change event on page load to apply the initial state
+        $('#override_icdCompanyName').trigger('change');
+        //End code to grey our COMPANY field------------------------->
+
+        // Autopopulate account field  -------------------------------------------->
+        $("#companyInfoCompleteSearch").autocomplete({
+            source: function (request, response) {
+                if (request.term.length >= 3) {
+                    $.ajax({
+                        url: "/_api/accounts?$select=icd_industrytype,name,accountid,address1_city,address1_country,address1_county,address1_stateorprovince,address1_line1,address1_line2,address1_line3,icd_grossrevenue,address1_postalcode,_icd_organizationsizebyrevenue_value,icd_monthofagm,icd_companytype",
+                        type: "GET",
+                        data: {
+                            $filter: "contains(name,'" + request.term + "')",
+                            $top: 5
+                        },
+                        success: function (data) {
+                            var results = $.map(data.value, function (account) {
+                                return {
+                                    label: account.name,  // Displayed va lue in the suggestion list
+                                    value: account.name,  // Value returned on selection
+                                    accountData: account  // Store the entire account object for later use
+                                };
+                            });
+                            response(results);
+                        },
+                        error: function () {
+                            console.error("Error fetching accounts from API");
+                        }
+                    });
+                }
+            },
+            minLength: 3,
+            select: function (event, ui) {
+                // Access the selected account's data
+                var selectedAccount = ui.item.accountData;
+
+                $("#icd_account").val(selectedAccount.accountid);
+                $("#icd_companyname").val(selectedAccount.name);
+                $("#icd_typeofcompany").val(selectedAccount.icd_companytype);
+                $("#icd_industry").val(selectedAccount.icd_industrytype);
+                $("#icd_organizationsizebyrevenue").val(selectedAccount._icd_organizationsizebyrevenue_value);
+                $("#icd_monthofagm").val(selectedAccount.icd_monthofagm);
+                $("#icd_city").val(selectedAccount.address1_city);
+                $("#icd_country").val(selectedAccount.address1_country);
+                $("#icd_county").val(selectedAccount.address1_county);
+                $("#icd_stateorprovince").val(selectedAccount.address1_stateorprovince);
+                $("#icd_line1").val(selectedAccount.address1_line1);
+                $("#icd_line2").val(selectedAccount.address1_line2);
+                $("#icd_line3").val(selectedAccount.address1_line3);
+                $("#icd_grossrevenue").val(selectedAccount.icd_grossrevenue);
+                $("#icd_postalcode").val(selectedAccount.address1_postalcode);
+            }
+        });
+        //End Autopopulate account field -------------------------------------------->
+
+
+        // Check if the #BoardMembershipRoaster div exists -------------------------------------------->
+        function chkMembershipRoasterRecord() {
+        var TotalAdditionalPrice = 0;
+        var rowCount = $('#BoardMembershipRoaster table tbody tr').length;
+        console.log("ajax started");
+        $.ajax({
+            url: "/_api/icd_applicationboardmembers?$count=true&$filter=_icd_application_value eq {{AppID}} &$select=icd_applicationboardmemberid",
+             type: "GET",
+             cache: true,  // Enable caching
+             async: false,
+            success: function (data) {
+                numberOfBoardMembers = data['@odata.count'];
+                console.log(numberOfBoardMembers);
+
+            },
+            error: function () {
+                console.error("Error fetching accounts from API");
+            }
+        });
+
+        console.log("record count started");
+        if (numberOfBoardMembers === 0) {
+            $('#NextButton, #saveDraft').prop('disabled', true);
+        } else if (numberOfBoardMembers > 15) {
+            $('#NextButton, #saveDraft').prop('disabled', false);
+            TotalAdditionalPrice = ((numberOfBoardMembers - 15) * Additionalprice) + productPrice;
+             showAlert('info',  `Adding more than 15 individual members to your board exceeds the board member limit of 15. The total amount is $${TotalAdditionalPrice}. `);
+        } else {
+            $('#NextButton, #saveDraft').prop('disabled', false);
+        }
+    }
+
+        if ($('#BoardMembershipRoaster').length) {
+            chkMembershipRoasterRecord();           
+        };
+        // End Check if the #BoardMembershipRoaster div exists   -------------------------------------------->
+
+
+    var count = 0;
+
+    var targetNode = document.getElementById('BoardMembershipRoaster');
+
+    // Define the configuration for observing  changes (e.g., childList for changes in child elements)
+    var config = { childList: true, subtree: true };
+
+    // Callback function to execute when mutations are observed
+    var callback = function(mutationsList, observer) {
+        // Loop through the mutations to detect any changes
+        mutationsList.forEach(function(mutation) {
+            if (mutation.type === 'childList') {
+                // Display alert when a change is detected
+                count = count +1 ;
+                chkMembershipRoasterRecord();
+                console.log(count);
+                return false;  // This exits the loop
+            }
+             
+        });
+    };
+
+    // Create a new MutationObserver instance and pass in the callback
+    var observer = new MutationObserver(callback);
+
+    // Start observing the target node for configured mutations
+    if (targetNode) {
+        observer.observe(targetNode, config);
+    }
+    $('#icd_companyname, #icd_typeofcompany, #icd_industry, #icd_organizationsizebyrevenue, #icd_monthofagm').on('input change', function() {
+    // Reset the #icd_account field to its default value
+      $('#icd_account').val('');
+    });
+
+        // Replace Organization Size by Revenue options with French labels if on fr-Fr page
+        if (window.location.pathname.includes("fr-Fr")) {
+        const dropdown = $("#icd_organizationsizebyrevenue");
+        const selectedValue = dropdown.val();
+        console.log("French language detected — updating #icd_organizationsizebyrevenue options");
+
+        $.ajax({
+            url: "/_api/icd_organizationsizebyrevenues?$select=icd_namefr,icd_organizationsizebyrevenueid",
+            type: "GET",
+            cache: true,
+            async: true,
+            success: function (data) {
+                console.log("Retrieved French labels:", data);
+
+                if (data && data.value && data.value.length > 0) {
+                    dropdown.empty();
+                    dropdown.append('<option value="">Sélectionner</option>');
+
+                    data.value.forEach(function (item) {
+                        const isSelected = item.icd_organizationsizebyrevenueid === selectedValue ? 'selected' : '';
+                        console.log(`Adding: ${item.icd_namefr} (${item.icd_organizationsizebyrevenueid})`);
+
+                        dropdown.append(
+                            `<option value="${item.icd_organizationsizebyrevenueid}" ${isSelected}>${item.icd_namefr}</option>`
+                        );
+                    });
+
+                    // 🔁 Set the value back and trigger change
+                    if (selectedValue) {
+                        dropdown.val(selectedValue).trigger('change');
+                        console.log("Lookup value re-selected and triggered change:", selectedValue);
+                    }
+
+                    console.log("Dropdown updated with French options.");
+                }
+            },
+            error: function (xhr, status, error) {
+                console.error("Failed to retrieve French values:", error);
+            }
+        });
+    }
+
+     
+        
+    });
+
+
+</script>

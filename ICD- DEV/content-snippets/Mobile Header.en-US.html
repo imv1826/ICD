@@ -1,0 +1,8 @@
+{% assign hrefLink = settings["Home URL"] | escape %}
+
+<a href='{{ hrefLink }}'>
+  {% if snippets['LogoUrlV2'] %}<img src='~/{{ snippets['LogoUrlV2'] }}' alt="{{ snippets['Logo alt text'] }}" style='margin: 0 10px;'>{% endif %}
+  {% if snippets['Site name'] %}
+    <h1 class='siteTitle custom-sitetitle d-none'>{{ snippets['Site name'] }}</h1>
+  {% endif %}
+</a>

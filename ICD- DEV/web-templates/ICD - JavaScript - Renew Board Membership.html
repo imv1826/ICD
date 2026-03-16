@@ -1,0 +1,167 @@
+{% assign AppID = request.params['id' ] | default: "" %}
+{% include 'ICD - Modal'%}
+{% if entities.icd_application[AppID].icd_organizationsizebyrevenue.id != null%}
+    {% assign OrgSize = entities.icd_application[AppID].icd_organizationsizebyrevenue.id%}
+    {% assign Product = entities.icd_organizationsizebyrevenue[OrgSize].icd_product.id%}
+    {% assign ProductPrice = entities.product[Product].price%}
+    {% assign additionalProduct = entities.icd_organizationsizebyrevenue[OrgSize].icd_additionalproduct.id%}
+    {% assign additionalProductPrice = entities.product[additionalProduct].price%}
+{% endif %}
+<script>
+
+    $(window).on('load', function () {
+        //additional price per additional board member 
+        var Additionalprice = 0; 
+        var productPrice = 0;
+        {% if Product != null and ProductPrice != null%}
+            productPrice = {{ProductPrice}};
+        {% endif %}
+        {% if additionalProduct != null and additionalProductPrice != null%}
+            Additionalprice = {{additionalProductPrice}};
+        {% endif %}
+        var numberOfBoardMembers = 0;
+        //$('#icd_account').closest('td').hide();
+
+
+        // Add the inline background color and make fields read-only if the checkbox is unchecked
+
+        const fieldsToDisable = [
+            '#icd_companyname',
+            '#icd_typeofcompany',
+            '#icd_industry',
+            '#icd_organizationsizebyrevenue',
+            '#icd_monthofagm'
+        ];
+
+        fieldsToDisable.forEach(function (selector)
+        {
+            const field = $(selector);
+
+            if (field.is('select') && field.val() != '')
+            {
+                field.prop('readonly', true);
+                field.attr('style', function (_, style) {return (style || '') + 'background-color: #f2f2f2 !important;';});
+            }
+            else if (field.val() != '')
+            {
+                field.attr('readonly', 'readonly');
+                field.attr('style', function (_, style) {return (style || '') + 'background-color: #f2f2f2 !important;';});                
+            }
+        });
+
+        // Replace Organization Size by Revenue options with French labels if on fr-Fr page
+        if (window.location.pathname.includes("fr-Fr")) {
+            const dropdown = $("#icd_organizationsizebyrevenue");
+            const selectedValue = dropdown.val();
+            console.log("French language detected — updating #icd_organizationsizebyrevenue options");
+
+            $.ajax({
+                url: "/_api/icd_organizationsizebyrevenues?$select=icd_namefr,icd_organizationsizebyrevenueid",
+                type: "GET",
+                cache: true,
+                async: true,
+                success: function (data) {
+                    console.log("Retrieved French labels:", data);
+
+                    if (data && data.value && data.value.length > 0) {
+                        dropdown.empty();
+                        dropdown.append('<option value="">Sélectionner</option>');
+
+                        data.value.forEach(function (item) {
+                            const isSelected = item.icd_organizationsizebyrevenueid === selectedValue ? 'selected' : '';
+                            console.log(`Adding: ${item.icd_namefr} (${item.icd_organizationsizebyrevenueid})`);
+
+                            dropdown.append(
+                                `<option value="${item.icd_organizationsizebyrevenueid}" ${isSelected}>${item.icd_namefr}</option>`
+                            );
+                        });
+
+                        console.log("Dropdown updated with French options.");
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error("Failed to retrieve French values:", error);
+                }
+            });
+        }
+
+
+        // Check if the #BoardMembershipRoaster div exists -------------------------------------------->
+        function chkMembershipRoasterRecord() {
+            var TotalAdditionalPrice = 0;
+            var rowCount = $('#BoardMembershipRoaster table tbody tr').length;
+            console.log("ajax started");
+            $.ajax({
+                url: "/_api/icd_applicationboardmembers?$count=true&$filter=_icd_application_value eq {{AppID}} &$select=icd_applicationboardmemberid",
+                type: "GET",
+                cache: true,  // Enable caching
+                async: false,
+                success: function (data) {
+                    numberOfBoardMembers = data['@odata.count'];
+                    console.log(numberOfBoardMembers);
+
+                },
+                error: function () {
+                    console.error("Error fetching accounts from API");
+                }
+            });
+
+            console.log("record count started");
+            if (numberOfBoardMembers === 0) {
+                $('#NextButton, #saveDraft').prop('disabled', true);
+            } else if (numberOfBoardMembers > 15) {
+                $('#NextButton, #saveDraft').prop('disabled', false);
+                TotalAdditionalPrice = ((numberOfBoardMembers - 15) * Additionalprice) + productPrice;
+                showAlert('info', `Adding more than 15 individual members to your board exceeds the board member limit of 15. The total amount is $${TotalAdditionalPrice}.`);
+            } else {
+                $('#NextButton, #saveDraft').prop('disabled', false);
+            }
+        }
+
+        if ($('#BoardMembershipRoaster').length) {
+            chkMembershipRoasterRecord();
+        };
+        // End Check if the #BoardMembershipRoaster div exists   -------------------------------------------->
+
+
+        var count = 0;
+
+        var targetNode = document.getElementById('BoardMembershipRoaster');
+
+        // Define the configuration for observing  changes (e.g., childList for changes in child elements)
+        var config = { childList: true, subtree: true };
+
+        // Callback function to execute when mutations are observed
+        var callback = function (mutationsList, observer) {
+            // Loop through the mutations to detect any changes
+            mutationsList.forEach(function (mutation) {
+                if (mutation.type === 'childList') {
+                    // Display alert when a change is detected
+                    count = count + 1;
+                    chkMembershipRoasterRecord();
+                    console.log(count);
+                    return false;  // This exits the loop
+                }
+
+            });
+        };
+
+        // Create a new MutationObserver instance and pass in the callback
+        var observer = new MutationObserver(callback);
+
+        // Start observing the target node for configured mutations
+        if (targetNode) {
+            observer.observe(targetNode, config);
+        }
+
+        //section to  deleted after disabling dropdown has been fixed
+        $('#NextButton').on('click', function () {
+            $('#icd_typeofcompany').prop('readonly', false);
+            $('#icd_industry').prop('readonly', false);
+            $('#icd_organizationsizebyrevenue').prop('readonly', false);
+            $('#icd_monthofagm').prop('readonly', false);
+            }
+        );
+    });
+
+</script>

@@ -1,0 +1,18 @@
+{% fetchxml ClearPortalCache %}
+  <fetch>
+    <entity name="icd_application">
+      <filter>
+        <condition attribute="createdon" operator="ne" value="{{now}}" />
+      </filter>
+    </entity>
+  </fetch>
+{% endfetchxml %}
+{% fetchxml ClearPortalCacheSnippet %}
+  <fetch>
+    <entity name="mspp_contentsnippet">
+      <filter>
+        <condition attribute="createdon" operator="ne" value="{{now}}" />
+      </filter>
+    </entity>
+  </fetch>
+{% endfetchxml %}

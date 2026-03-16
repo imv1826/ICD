@@ -1,0 +1,19 @@
+{% include 'Default studio template'%}
+{% assign bmID = request.params['id' ] | default: "" %}
+{% block main %}
+
+  <div class="container" style="display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout"
+      style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">  
+      {%if request.path contains "fr-Fr"%}
+      <h2>Renseignements sur le T2202</h2>
+      {%else%}
+      <h2>T2202 Information</h2>
+      {%endif%}
+        {% entityform name: 'zPortal - T2202 Certificate' %}
+    </div>
+  </div>
+
+
+
+{% endblock %}

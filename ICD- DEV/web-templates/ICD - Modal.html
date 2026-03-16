@@ -1,0 +1,211 @@
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.8.1/font/bootstrap-icons.min.css">
+
+<!------------------------------------------------ Loading Modal -------------------------------------------->
+<div class="modal fade" id="loadingModal" tabindex="-1" style="z-index:1056 !important" aria-labelledby="loadingModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="loadingModalLabel">Loading...</h5>
+          </div>
+      <div class="modal-body text-center">
+        <div class="spinner-border text-primary" role="status"></div>
+        <h5 id="loadingModalMessage" class="modal-title">Please wait...</ph5>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+    // Function to dynamically show the loading modal with a custom message
+    function showLoadingModal(customMessage = "Please wait...") {
+        // Update the modal body message
+        $('#loadingModalMessage').text(customMessage);
+
+        // Show the modal
+        $('#loadingModal').modal('show');
+    }
+
+    // Function to hide the loading modal
+    function hideLoadingModal() {
+        $('#loadingModal').modal('hide');
+    }
+</script>
+<!------------------------------------------------ Loading Modal ------------------------------------------->
+
+
+<!------------------------------------------------ Confirmation Modal -------------------------------------->
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1" aria-labelledby="confirmationModalLabel" aria-label="confirmationModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confirmationModalLabel">Confirmation</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="confirmationModalBody">
+        Are you sure you want to proceed?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="modalSecondaryButton" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="modalPrimaryButton">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- sample jquery code to trigger modal dynamically using function
+showConfirmationModal(
+    "Save Changes",
+    "Do you want to save the changes?",
+    "Save",
+    "Don't Save",
+    function() { 
+        console.log("Changes saved");
+        // Add save logic here
+    },
+    function() {
+        console.log("Changes not saved");
+    }
+);
+
+-->
+
+<script>
+    function showConfirmationModal(title, body, primaryButtonLabel, secondaryButtonLabel, primaryAction, secondaryAction) {
+        // Update modal title and body content
+        $('#confirmationModalLabel').text(title);
+        $('#confirmationModalBody').text(body);
+
+        // Update button labels
+        $('#modalPrimaryButton').text(primaryButtonLabel);
+        $('#modalSecondaryButton').text(secondaryButtonLabel);
+
+        // Remove any previous click event handlers to prevent multiple actions
+        $('#modalPrimaryButton').off('click');
+        $('#modalSecondaryButton').off('click');
+
+        // Add new actions for buttons
+        $('#modalPrimaryButton').on('click', function() {
+            if (primaryAction && typeof primaryAction === 'function') {
+                primaryAction();
+            }
+            $('#confirmationModal').modal('hide');
+        });
+
+        $('#modalSecondaryButton').on('click', function() {
+            if (secondaryAction && typeof secondaryAction === 'function') {
+                secondaryAction();
+            }
+            $('#confirmationModal').modal('hide');
+        });
+
+        // Show the modal
+        $('#confirmationModal').modal('show');
+    }
+</script>
+
+<!------------------------------------------------ Confirmation Modal -------------------------------------->
+
+<!------------------------------------------------ Alert  ----- ----- -------------------------------------->
+<!-- Alert Container -->
+
+<div id="alertContainer" class="position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 1050;">
+</div>
+
+
+<script>
+function showAlert(type, message) {
+    // Define alert types and corresponding Bootstrap classes and icons
+    const alertTypes = {
+        success: {
+            class: 'alert-success',
+            icon: '<i class="bi bi-check-circle"></i>'
+        },
+        error: {
+            class: 'alert-danger',
+            icon: '<i class="bi bi-x-circle"></i>'
+        },
+        info: {
+            class: 'alert-info',
+            icon: '<i class="bi bi-info-circle"></i>'
+        }
+    };
+
+    // Get the alert settings based on the type
+    const settings = alertTypes[type] || alertTypes.info;
+    
+    // Create alert HTML
+    const alertHtml = `
+        <div class="alert ${settings.class} alert-dismissible fade show" role="alert">
+            ${settings.icon} ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+
+    // Append the alert to the alert container
+    $('#alertContainer').html(alertHtml);
+
+    // Automatically remove alert after a timeout (e.g., 5 seconds)
+    setTimeout(() => {
+        $('.alert').alert('close');
+    }, 5000);
+}
+
+// Example usage:
+// For success alert
+//showAlert('success', 'Your changes have been saved successfully.');
+// For error alert//showAlert('error', 'There was an error processing your request.');
+// For informative alert
+//showAlert('info', 'Here is some important information.');
+
+</script>
+<!------------------------------------------------ Alert  ----- ----- -------------------------------------->
+
+<!------------------------------------------------ Alert modal  ----- ----- -------------------------------------->
+
+<script>
+function AlertPopup( description, buttonLabel, buttonAction) {
+    // Remove existing modal if it exists
+    let existingModal = document.getElementById('alertPopupModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Create the modal HTML structure
+    let modalHtml = `
+        <div class="modal fade" id="alertPopupModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-body">
+                        <p>${description}</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button id="alertPopupButton" class="btn btn-primary">${buttonLabel}</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    
+    // Append modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Show the modal
+    let modalElement = new bootstrap.Modal(document.getElementById('alertPopupModal'));
+    modalElement.show();
+    
+    // Button click event
+    document.getElementById('alertPopupButton').addEventListener('click', function () {
+        if (typeof buttonAction === 'function') {
+            buttonAction();
+        }
+        modalElement.hide();
+    });
+}
+
+/* example to call function
+AlertPopup("Are you sure you want to proceed?", "OK", function() {
+    console.log("User confirmed!");
+});
+AlertPopup("This is a simple alert!", "Close", null);
+*/
+</script>

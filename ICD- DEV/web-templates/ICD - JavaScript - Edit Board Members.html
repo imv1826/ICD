@@ -1,0 +1,39 @@
+ {% assign AppID = request.params['id' ] | default: "" %}
+ <script>
+
+$(window).on('load', function () {
+
+console.log("test");
+
+    function BoardMembers() {
+        var rowCount = $('.BoardMembersSubgrid tbody tr').length;
+        console.log('Number of data rows in the table:', rowCount);
+        console.log("ajax started");
+        $.ajax({
+            url: "/_api/icd_applicationboardmembers?$count=true&$filter=_icd_application_value eq {{AppID}} &$select=icd_applicationboardmemberid",
+             type: "GET",
+             cache: true,  // Enable caching
+             async: false,
+            success: function (data) {
+                numberOfBoardMembers = data['@odata.count'];
+                console.log(numberOfBoardMembers);
+
+            },
+            error: function () {
+                console.error("Error fetching accounts from API");
+            }
+        });
+        
+
+    if (numberOfBoardMembers > 15) {
+        showAlert('info',  `Adding more than 15 result in additional fees required.`);
+    }
+    }
+
+    if ($('#BoardMembersSubgrid').length) {
+        BoardMembers();           
+        };
+    
+ });
+
+    </script>

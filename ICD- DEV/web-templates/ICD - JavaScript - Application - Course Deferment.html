@@ -1,0 +1,358 @@
+{% include 'ICD - Modal'%}
+{% assign AppID = application.id | default: "" %}
+{% assign AppEventRecordsubtype = application.icd_recordsubtype.value | default: "" %}
+{% assign eventId = application.icd_registrationfor.id | default: "" %}
+{% assign event = entities['msevtmgt_event'][eventId] %}
+{% assign eventStartDate = event.msevtmgt_eventstartdate |  date: "yyyy-MM-dd HH:mm" %}
+{% assign eventStartDateAcademicYr = event.msevtmgt_eventstartdate | date_add_days: -365 |  date: "yyyy-MM-dd HH:mm" %}
+{% assign eventEndDateAcademicYr = event.msevtmgt_eventstartdate| date_add_days: 365 |  date: "yyyy-MM-dd HH:mm"  %}
+{% assign eventTimeZone = event.msevtmgt_eventtimezonename | default: 0 %}
+{% assign currentDateTime = now | date: "yyyy-MM-ddTHH:mm:ssZ" %}
+{% assign language = "en-US" %}
+{% if request.path contains "fr-Fr" %}
+    {% assign language = "fr-Fr" %}
+{% endif %}
+{% assign currentDatePlus15 = now | date_add_days: 15 |  date: "yyyy-MM-dd HH:mm" %}
+<script>
+   
+    // Define an array to store the data
+    var EligibleEvent = [];
+    var purchasedEvent = [];
+
+    //Convert localized date string (English or French) to a valid ISO format JavaScript understands
+    function convertDateFormat(inputDate) {
+        //console.log("Date conversion function called with date:", inputDate);
+
+        {% if language == "en-US" %}
+            // Expected format: MM/DD/YYYY hh:mm:ss AM/PM
+            var parts = inputDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}) (\d{1,2}):(\d{2}):(\d{2}) (AM|PM)$/i);
+            if (!parts) return null;
+
+            let month = parseInt(parts[1]) - 1; // JavaScript months are 0-based
+            let day = parseInt(parts[2]);
+            let year = parseInt(parts[3]);
+            let hour = parseInt(parts[4]);
+            let minute = parseInt(parts[5]);
+            let second = parseInt(parts[6]);
+            let ampm = parts[7].toUpperCase();
+
+            if (ampm === "PM" && hour < 12) hour += 12;
+            if (ampm === "AM" && hour === 12) hour = 0;
+
+            return new Date(year, month, day, hour, minute, second); // returns valid Date object
+
+        {% else %}
+            // Expected format: DD/MM/YYYY HH:mm:ss (24-hour format)
+            var parts = inputDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}) (\d{1,2}):(\d{2}):(\d{2})$/);
+            if (!parts) return null;
+
+            let day = parseInt(parts[1]);
+            let month = parseInt(parts[2]) - 1;
+            let year = parseInt(parts[3]);
+            let hour = parseInt(parts[4]);
+            let minute = parseInt(parts[5]);
+            let second = parseInt(parts[6]);
+
+            return new Date(year, month, day, hour, minute, second);
+        {% endif %}
+    }    
+
+
+    // Function to determine the academic year start and end based on an event date
+    function getAcademicYearForEvent(eventDate) {
+        var event = new Date(eventDate);
+        event.setHours(0, 0, 0, 0); // Normalize time
+
+        var startYear = event.getFullYear();
+        var endYear = startYear + 1;
+
+        var academicYearStart = new Date(startYear, 6, 1); // July 1
+        var academicYearEnd = new Date(endYear,5, 30); // June 30
+
+
+        if (event < academicYearStart) {
+            startYear -= 1;
+            endYear -= 1;
+            academicYearStart = new Date(startYear, 6, 1);
+            academicYearEnd = new Date(endYear, 5, 30);
+        }
+
+        academicYearStart.setHours(0, 0, 0, 0);
+        academicYearEnd.setHours(23, 59, 59, 0);
+        // Log raw dates
+        //console.log("Raw academicYearStart:", academicYearStart);
+        //console.log("Raw academicYearEnd:", academicYearEnd);
+
+        // Local format function
+        function formatDateLocal(date) {
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        const formattedStartDate = formatDateLocal(academicYearStart);
+        const formattedEndDate = formatDateLocal(academicYearEnd);
+
+        //onsole.log("Formatted academicYearStart:", formattedStartDate);
+        //console.log("Formatted academicYearEnd:", formattedEndDate);
+
+        return {
+            start: formattedStartDate,
+            end: formattedEndDate
+        };
+    }
+ 
+    function formatDateByBrowserLocale(date) {
+        return new Date(date).toLocaleString(navigator.language, {
+            year: 'numeric',
+            month: '2-digit',  // Two-digit month (e.g., '04')
+            day: '2-digit',    // Two-digit day (e.g., '29')
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false // 24-hour time format, set true for 12-hour format
+        });
+    }
+    
+    //console.log("AppEventRecordsubtype:", "{{ AppEventRecordsubtype }}");
+    //console.log("eventEndDateAcademicYr:", "{{ eventEndDateAcademicYr }}");
+    //console.log("eventStartDate:", "{{ eventStartDate }}");
+    //console.log("Fetching Events Events");
+    {% fetchxml Events %}
+        <fetch top="50">
+            <entity name="msevtmgt_event">
+                <attribute name="msevtmgt_eventid" />
+                <attribute name="icd_descriptionfr" />
+                <attribute name="icd_eventnamefr" />
+                <attribute name="msevtmgt_description" />
+                <attribute name="msevtmgt_eventenddate" />
+                <attribute name="msevtmgt_eventstartdate" />
+                <attribute name="msevtmgt_name" />
+                <attribute name="icd_audiencetype" />
+                    <attribute name="msevtmgt_eventtimezone" />
+                <filter>
+                    <condition attribute="icd_recordsubtype" operator="eq" value="{{AppEventRecordsubtype }}" />
+                    <condition attribute="statecode" operator="eq" value="0" />
+                    <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000003" />            
+                    <condition attribute="msevtmgt_eventstartdate" operator="lt" value="{{eventEndDateAcademicYr }}" />
+                    <condition attribute="msevtmgt_eventstartdate" operator="gt" value="{{ currentDatePlus15 }}" />
+                </filter>
+            </entity>            
+        </fetch>
+    {% endfetchxml %}
+
+    {% for Event in Events.results.entities %}
+        var EligibleEventData = {            
+            eventID:"{{ Event.msevtmgt_eventid }}",
+            {% if language == "fr-Fr" %}
+                eventDescription: `{{ Event.icd_descriptionfr }}`,
+                eventName: "{{ Event.icd_eventnamefr }}",
+            {% else %}
+                eventDescription: `{{ Event.msevtmgt_description }}`,
+                eventName: "{{ Event.msevtmgt_name }}",
+            {% endif %}
+            eventStartDate: convertDateFormat("{{ Event.msevtmgt_eventstartdate }}"),
+            eventEndDate: convertDateFormat("{{ Event.msevtmgt_eventenddate }}"),
+            eventTimeZone: "{{ Event.msevtmgt_eventtimezone }}",
+            timezoneName: "",
+            audienceType: "{{Event.icd_audiencetype.value}}"
+        };
+
+        EligibleEvent.push(EligibleEventData);
+        
+    {% endfor %}
+    //console.log("Eligible event", EligibleEvent);
+    
+
+    {% fetchxml purchasedEvents %}
+        <fetch top="50">
+            <entity name="msevtmgt_eventregistration">
+                <attribute name="msevtmgt_eventid" />
+                <filter>
+                    <condition attribute="statuscode" operator="eq" value="1" />
+                    <condition attribute="msevtmgt_contactid" operator="eq" value="{{appContact.id }}" />
+                </filter>
+            </entity>
+        </fetch>
+    {% endfetchxml %}
+    {% for purchasedEvent in purchasedEvents.results.entities %}
+
+        var purchasedEventData = {
+            eventID:"{{ purchasedEvent.msevtmgt_eventid.id }}"
+            
+        };
+        purchasedEvent.push(purchasedEventData);
+    {% endfor %}
+    //console.log("purchasedEvent ",purchasedEventData); 
+    
+    {% fetchxml timezone %}
+        <fetch top="50">
+            <entity name="timezonedefinition">
+            <attribute name="bias" />
+            <attribute name="daylightname" />
+            <attribute name="standardname" />
+            <attribute name="timezonecode" />
+            <attribute name="userinterfacename" />
+            </entity>
+        </fetch>
+    {% endfetchxml %}
+    //console.log("number of record for timezone : {{timezone.results.entities.size }}")
+    var timezoneData = [
+        {% for timezone in timezone.results.entities %}
+            {
+                "biasMinutes": "{{ timezone.bias }}",
+                "daylightname": "{{ timezone.daylightname }}",
+                "standardname": "{{ timezone.standardname }}",
+                "timezonecode": "{{ timezone.timezonecode }}"
+                //"userinterfacename": "{{ timezone.userinterfacename }}",
+                //"daylightbias": "{{ timezone.tzdef.daylightbias }}",
+                //"effectivedatetime": "{{ timezone.tzdef.effectivedatetime }}"
+            },
+        {% endfor %}
+    ];
+
+    
+
+    
+    // Filter eligible events based on academic year
+    var finalEligibleEvent = EligibleEvent.filter(function(eligible) {
+            // Get the academic year for the event start date
+        //console.log("event Start Date:", "{{eventStartDate}}");
+        var academicYear = getAcademicYearForEvent("{{eventStartDate}}");
+        //console.log("Academic Year Start Date:", academicYear.start);
+        //console.log("Academic Year End Date:", academicYear.end);
+
+        // Parse the academic year start and end dates to Date objects
+        var academicYearStartDate = new Date(academicYear.start);
+        var academicYearEndDate = new Date(academicYear.end);
+
+       //console.log("academicYearStartDate:", academicYearStartDate);
+       //console.log("academicYearEndDate:", academicYearEndDate);
+
+        // Parse the event's start date as a Date object
+        var sessionStartDate = new Date(eligible.eventStartDate);
+        //console.log("sessionStartDate:", sessionStartDate);
+
+        // Check if the session start date is within the academic year range
+        var isInAcademicYearRange = sessionStartDate >= academicYearStartDate && sessionStartDate <= academicYearEndDate;
+       //console.log("isInAcademicYearRange:", isInAcademicYearRange);
+
+        // Return the session if it is within the academic year range and not already purchased
+        return isInAcademicYearRange && !purchasedEvent.some(function(purchased) {
+            return eligible.eventID === purchased.eventID;
+        });
+    });
+
+    //console.log("Final Eligible Events:", finalEligibleEvent);
+
+
+    function extractTimeZone(text) {
+        if (text) {
+            const match = text.match(/\((.*?)\)/);
+            return match ? match[1] : null;
+        }
+        return null; // Return null if the text is null or undefined
+    }
+
+    
+
+
+     $(window).on('load', function () {
+    // Hide the parent <tr> of the element with the id 'icd_sessionselection'
+        $('#icd_deferredoffering').closest('tr').hide();
+        $('#icd_recordsubtype').closest('tr').hide();
+        $('[data-name="EventSelection"]').css('max-height', '50vh').css('overflow-y', 'auto');
+
+        const $tableBody = $("[data-name='EventSelection'] tbody");
+
+        const extracted = extractTimeZone("{{ eventTimeZone }}");
+        const language = "{{ language }}";
+    
+        // Define button text based on language
+        const Select = language === "fr-FR" ? "Ajouter" : "Select";
+        const Selected = language === "fr-FR" ? "Ajouté" : "Selected";
+
+        
+        let filteredEvents = finalEligibleEvent;
+    
+        // Filter sessions by MembershipType
+        //filteredEvents = filteredEvents.filter(session => session.MembershipType == "" || session.MembershipType.includes({{appContactmemberhsip}}));
+        //console.log(filteredEvents);
+    
+        filteredEvents.forEach(function(event) {
+            $tableBody.append(`                  
+                <tr data-event-id="${event.eventID}"> 
+                    <td colspan="2">
+                        <div class="card mb-3">
+                            <div class="card-body d-flex align-items-center">
+                                <!-- Left Side: Button -->
+                                <button type="button" style="width: 120px;" class="btn btn-primary add-event me-3"
+                                    data-event-id="${event.eventID}">${Select}</button>
+                                
+                                <!-- Right Side: Text Content -->
+                                <div class="flex-grow-1">
+                                    <a href="javascript:void(0);" class="card-title mb-0 fs-6 text-decoration-none">
+                                        ${event.eventName}
+                                     </a>
+                                    <i class="fas fa-info-circle ms-2" data-bs-toggle="tooltip" data-bs-placement="top"
+                                        title="${event.eventDescription}" style="cursor: pointer;">
+                                    </i>
+                                    <p class="card-text mt-1 fs-6">
+                                        <strong>Time:</strong> ${formatDateByBrowserLocale(event.eventStartDate)} - ${formatDateByBrowserLocale(event.eventEndDate)}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `);
+        });
+    
+            
+    
+    
+        // Enable tooltips
+        $('[data-bs-toggle="tooltip"]').tooltip();
+    
+        // Initialize Bootstrap 5 tooltips
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+        const preselectedValue = $('#icd_deferredoffering').val();
+        if (preselectedValue) {
+            $('.add-event').each(function () {
+                const $btn = $(this);
+                $btn.removeClass('btn-secondary').addClass('btn-primary').html('Select');
+                if ($btn.data('event-id') == preselectedValue) {
+                    $btn.removeClass('btn-primary').addClass('btn-secondary').html(Selected);
+                }
+            });
+        }
+    
+        // Handle checkbox state change and populate #icd_sessionselection 
+        $(document).on('click', '.add-event', function () {
+
+
+            var $this = $(this);
+            
+            var selectedEventId = $this.data('event-id');
+        
+            // Set dropdown value
+            $('#icd_deferredoffering').val(selectedEventId).trigger('change');
+        
+            // Reset all buttons
+            $('.add-event')
+                .removeClass('btn-secondary')
+                .addClass('btn-primary')
+                .each(function () {
+                    $(this).html('Select');
+                });
+        
+            // Update clicked button
+            $this
+                .removeClass('btn-primary')
+                .addClass('btn-secondary')
+                .html(`${Selected}`);
+        });
+     
+    }) 
+</script>

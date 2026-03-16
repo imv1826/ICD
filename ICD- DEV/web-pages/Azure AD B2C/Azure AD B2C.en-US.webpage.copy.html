@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Sign Up</title>
+    </head>
+    <body>
+        <script>
+            function fillDropdownControl() {
+            var dataverseEndpoint = "https://YOUR_DATAVERSE_API_URL";  // Your Dataverse API endpoint
+
+            var dropdownId = "#extension_CASLCompliance";  // The ID of the dropdown control
+
+        // Fetch the list of values from the API
+            $.get(dataverseEndpoint).done(function (res) {
+                $(dropdownId).find("option:last").remove();  // Remove the placeholder value
+
+            // Loop through the response and add the values as options in the dropdown
+                $.each(res, function(i, v) {
+                $(dropdownId).append("<option value='" + v + "'>" + v + "</option>");
+                    });
+                });
+            }
+
+    fillDropdownControl();  // Call the function to populate the dropdown
+        </script>
+
+        <div id="api"></div>
+    </body>
+
+</html>

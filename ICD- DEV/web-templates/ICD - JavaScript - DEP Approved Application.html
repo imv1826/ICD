@@ -1,0 +1,35 @@
+{% assign icdApplicationId = request.params['id'] %}
+{% fetchxml activeInvoices cache: "false"%}
+<fetch>
+  <entity name="invoice">
+    <attribute name="totalamount" />
+    <filter>
+      <condition attribute="statecode" operator="eq" value="0" />
+      <condition attribute="icd_application" operator="eq" value="{{ icdApplicationId }}" />
+      <condition attribute="createdon" operator="on-or-before" value="{{ now | date: 'o' }}" />
+    </filter>
+  </entity>
+</fetch>
+{% endfetchxml %}
+
+{% assign totalAmount = 0 %}
+
+{% for invoice in activeInvoices.results.entities %}
+    {% assign totalAmount = totalAmount | plus: invoice.totalamount %}
+{% endfor %}
+
+{% if totalAmount > 0 %}
+<script>
+    $(document).ready(function () {
+        $('#icd_paymentinstallment').parent().addClass("required");
+        $('#icd_paymentinstallment').closest(".control").prev().addClass("required");
+        $('#icd_paymentinstallment').prop('required', true);
+    });
+</script>
+{% else %}
+<script>
+    $(document).ready(function () {
+        $('#icd_paymentinstallment').closest('tr').hide();
+    });
+</script>
+{% endif %}

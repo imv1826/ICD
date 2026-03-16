@@ -1,0 +1,243 @@
+{% include 'ICD - CSS'%}
+{% include 'ICD Helper - WebAPI Wrapper AJAX' %}
+{% include 'ICD - Modal'%}
+
+{% assign application = entities['icd_application'][request.params.id]%}
+{% assign applicationType = application.icd_apptype.id%}
+{% assign applicationStatusReason = application.statuscode.value%}
+{% assign applicationstatus = application.statuscode.value%}
+{% assign appContact = entities['contact'][application.icd_contact.id] %}
+{% assign appContactmemberhsip = appContact.icd_membershipstatus.value | default: "100000000" %}
+{% assign currentContactRec = entities['contact'][user.id] %}
+{% assign is_delegate_user = currentContactRec.icd_isdelegateuser | default: false %}
+
+<!--Get Application Type Payment Method-->
+{% assign AppTypeEntity = entities.icd_applicationtype[applicationType] | default: ""  %}
+{% assign paymentMethod = AppTypeEntity.icd_acceptedpaymentmethod  %}
+
+{% if application.icd_registrationfor.id %}
+    {% assign Event = entities['msevtmgt_event'][application.icd_registrationfor.id] %}
+    {% if Event %}
+        {% if request.path contains "fr-Fr" %}
+            {% assign EventName = Event.icd_eventnamefr %}
+          {% else %}
+            {% assign EventName = Event.msevtmgt_name %}
+        {% endif %}
+    {% endif %}
+{% endif %}
+{%comment %}'
+{% assign EventName = 'Événement - ' | append:Event.icd_eventnamefr %}
+{%endcomment %}
+<script type="text/javascript" src="https://services.postcodeanywhere.co.uk/js/address-3.91.js" defer></script>
+
+
+{% block main %}
+
+
+<style>
+    #EntityFormView .text-muted {
+        display: none;
+    }
+</style>
+
+
+<script>
+    {% include "AddressComplete" line1: "icd_line1" line2: "icd_line2" city: "icd_city" province: "icd_stateorprovince" postalcode: "icd_postalcode" country: "icd_country" LimitCountry: "CAN,AFG, ALB, DZA, AND, AGO, ATG, ARG, ARM, AUS, AUT, AZE, BHS, BHR, BGD, BRB, BLR, BEL, BLZ, BEN, BTN, BOL, BIH, BWA, BRA, BRN, BGR, BFA, BDI, CPV, KHM, CMR, CAF, TCD, CHL, CHN, COL, COM, COG, COD, CRI, HRV, CUB, CYP, CZE, DNK, DJI, DMA, DOM, ECU, EGY, SLV, GNQ, ERI, EST, SWZ, ETH, FJI, FIN, FRA, GAB, GMB, GEO, DEU, GHA, GRC, GRD, GTM, GIN, GNB, GUY, HTI, HND, HUN, ISL, IND, IDN, IRN, IRQ, IRL, ISR, ITA, JAM, JPN, JOR, KAZ, KEN, KIR, KWT, KGZ, LAO, LVA, LBN, LSO, LBR, LBY, LIE, LTU, LUX, MDG, MWI, MYS, MDV, MLI, MLT, MHL, MRT, MUS, MEX, FSM, MDA, MCO, MNG, MNE, MAR, MOZ, MMR,NAM, NRU, NPL, NLD, NZL, NIC, NER, NGA, PRK, MKD, NOR, OMN, PAK, PLW, PAN, PNG, PRY, PER, PHL, POL, PRT, QAT, ROU, RUS, RWA, KNA, LCA, VCT, WSM, SMR, STP, SAU, SEN, SRB, SYC, SLE, SGP, SVK, SVN, SLB, SOM, ZAF, KOR, SSD, ESP, LKA, SDN, SUR, SWE, CHE, SYR, TWN, TJK, TZA, THA, TLS, TGO, TON, TTO, TUN, TUR, TKM, TUV, UGA, UKR, ARE, GBR, USA, URY, UZB, VUT, VAT, VEN, VNM, YEM, ZMB, ZWE" %}
+    {% include "AddressComplete" line1: "icd_billtoline1" line2: "icd_billtoline2" city: "icd_billtocity" province: "icd_billtostateorprovince" postalcode: "icd_billtopostalcode" country: "icd_billtocountry" LimitCountry: "CAN,AFG, ALB, DZA, AND, AGO, ATG, ARG, ARM, AUS, AUT, AZE, BHS, BHR, BGD, BRB, BLR, BEL, BLZ, BEN, BTN, BOL, BIH, BWA, BRA, BRN, BGR, BFA, BDI, CPV, KHM, CMR, CAF, TCD, CHL, CHN, COL, COM, COG, COD, CRI, HRV, CUB, CYP, CZE, DNK, DJI, DMA, DOM, ECU, EGY, SLV, GNQ, ERI, EST, SWZ, ETH, FJI, FIN, FRA, GAB, GMB, GEO, DEU, GHA, GRC, GRD, GTM, GIN, GNB, GUY, HTI, HND, HUN, ISL, IND, IDN, IRN, IRQ, IRL, ISR, ITA, JAM, JPN, JOR, KAZ, KEN, KIR, KWT, KGZ, LAO, LVA, LBN, LSO, LBR, LBY, LIE, LTU, LUX, MDG, MWI, MYS, MDV, MLI, MLT, MHL, MRT, MUS, MEX, FSM, MDA, MCO, MNG, MNE, MAR, MOZ, MMR,NAM, NRU, NPL, NLD, NZL, NIC, NER, NGA, PRK, MKD, NOR, OMN, PAK, PLW, PAN, PNG, PRY, PER, PHL, POL, PRT, QAT, ROU, RUS, RWA, KNA, LCA, VCT, WSM, SMR, STP, SAU, SEN, SRB, SYC, SLE, SGP, SVK, SVN, SLB, SOM, ZAF, KOR, SSD, ESP, LKA, SDN, SUR, SWE, CHE, SYR, TWN, TJK, TZA, THA, TLS, TGO, TON, TTO, TUN, TUR, TKM, TUV, UGA, UKR, ARE, GBR, USA, URY, UZB, VUT, VAT, VEN, VNM, YEM, ZMB, ZWE" %}
+    // Set session variable
+    sessionStorage.setItem("Application/AccountLookup/Typing", "{{ snippets['Application/AccountLookup/Typing'] | escape }}");
+    sessionStorage.setItem("Application/AccountLookup/Checkbox", "{{ snippets['Application/AccountLookup/Checkbox'] | escape }}");
+    var AppContactMembership = {{appContactmemberhsip}};
+</script>
+
+<!-- Org Membership -->
+<div class="row sectionBlockLayout text-start"
+    style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+    <div class="container" style="display: flex; flex-wrap: wrap;">
+        <div class="col-lg-12 columnBlockLayout"
+            style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">
+            {% if applicationType == "7ff79dcd-827a-ef11-ac20-6045bdf99e57" %}
+
+            <!-- Org Membership -->
+            <h2>{{ snippets["Application/BoardMembership/Title"] }} </h2>
+            {% webform name: 'Board Membership' %}
+            {% include 'ICD - JavaScript - Board Membership'%}
+
+            {% elseif applicationType == "83f79dcd-827a-ef11-ac20-6045bdf99e57"%}
+                <!-- Event -->
+                {% assign eventId = application.icd_registrationfor.id | default: "" %}
+                {% assign event = entities['msevtmgt_event'][eventId] %}
+                {% if event.msevtmgt_publishstatus.value ==100000003 and event.msevtmgt_registrationcount < event.msevtmgt_maximumeventcapacity %}
+                    <h2>{{EventName}}</h2>
+                    {% webform name: 'Event Application' %}
+                    {% include 'ICD - JavaScript - Application Event' %}
+                    {% comment %}
+                        event.msevtmgt_maximumeventcapacity != 0 
+                    {% endcomment %}
+                {% else %}
+                    <script type="text/javascript">
+                        showAlert('error',  'Sorry this event is no more open for registration');
+                    </script>
+                {% endif %}
+            {% elseif applicationType == "fbf3ae1f-88dd-ef11-a730-6045bdf9be70" and applicationStatusReason ==100000020 %}  
+                <h2>{{EventName}} - Continue</h2>
+                {% webform name: 'Event Waitlist Application - Read Only' %}
+                {% include 'ICD - JavaScript - Application Event' %}
+            
+            {% elseif applicationType == "f7009422-d4f9-ef11-bae2-7c1e5206390e"%}
+            <!-- Course Waitlist Application -->
+            <h2>{{EventName}} - {{ snippets["Application/WaitlistRegistration/Title"] }}</h2>
+            {% entityform name: 'Course Waitlist Application' %}
+            {% include 'ICD Hide Message CSS'%}
+
+            {% elseif applicationType == "fbf3ae1f-88dd-ef11-a730-6045bdf9be70"%}
+            <!-- Event Waitlist Application -->  
+                <h2>{{EventName}} - {{ snippets["Application/WaitlistRegistration/Title"] }}</h2>
+                {% webform name: 'Event Waitlist Application' %}
+                {% include 'ICD - JavaScript - Application Event Waitlist' %}
+
+            {% elseif applicationType == "caeea6d3-827a-ef11-ac20-6045bdf99e57"%}
+                <!-- Short Course  -->
+               <h2>{{ snippets["Application/Course/Title"] }} - {{EventName}}</h2>
+               {% webform name: 'Short Course Registration Form' %}
+               {% include 'ICD - JavaScript - Application - Account/Company Lookup'%}
+               {% include 'ICD - JavaScript - Application Courses'%}
+
+            {% elseif applicationType == "c82fa81e-6cbc-ef11-a72e-7c1e5206390e"%}
+            
+                <!-- Conference Application -->
+                <h2>{{ snippets["Application/Conference/Title"] }} - {{EventName}}</h2>
+                {% webform name: 'Conference Application' %}
+                {% include 'ICD - JavaScript - Conference Application' %}
+
+                {% elseif applicationType == "cbd72e80-51f7-ef11-bae2-6045bdf9b61a"%}
+            
+                <!-- Edit Guest Session Application -->
+               
+                {% webform name: 'Edit Guest Session' %}
+                {% include 'ICD - JavaScript - Application Edit Guest Sessions' %}
+
+            {% elseif applicationType == "9c6e87af-b5ee-ef11-be21-6045bdf9b61a"%}
+                <!-- Edit Conference Application -->
+                <h2>{{ snippets["Application/EditConference/Title"] }} - {{EventName}}</h2>
+                {% webform name: 'Edit Conference Application' %}
+                {% include 'ICD - JavaScript - Conference Application' %}
+
+            {% elseif applicationType == "ba412832-32f3-ef11-be21-7c1e5206390e"%}
+                <!-- DEP Deferral Application -->
+                <h2>{{ snippets["Application/DEPDeferral/Title"] }} - {{EventName}}</h2>
+                {% webform name: 'DEP Deferral Application Form' %}
+                {% include 'ICD - JavaScript - Application - DEP Deferment'%}
+
+
+            {% elseif applicationType == "ffc258aa-2ef9-ef11-bae1-6045bdf9994e"%}
+                <!-- GEP Deferral Application -->
+                <h2>{{ snippets["Application/GEPDeferral/Title"] }}</h2>
+                
+                {% webform name: 'Deferral Course' %}
+                {% include 'ICD - JavaScript - Application - Course Deferment' %}
+
+            {% elseif applicationType == "ac2e77b0-2ef9-ef11-bae1-6045bdf9994e"%}
+                <!-- BDP Deferral Application -->
+                <h2>{{ snippets["Application/BDPDeferral/Title"] }}</h2>
+                
+                {% webform name: 'Deferral Course' %}
+                {% include 'ICD - JavaScript - Application - Course Deferment' %}
+
+            {% elseif applicationType == "648996bd-2ef9-ef11-bae1-6045bdf9994e"%}
+                <!-- Short Course Deferral Application -->
+                <h2>{{ snippets["Application/ShortCourseDeferral/Title"] }}</h2>
+                {% webform name: 'Deferral Course' %}
+                {% include 'ICD - JavaScript - Application - Course Deferment' %}
+                
+            {% elseif applicationType == "6701340a-e980-ef11-ac21-6045bdf99e57"%}
+                <!-- Edit Board members -->
+                <h2>{{ snippets["Application/EditBoardMembers/Title"] }}</h2>
+               {% webform name: 'Edit Board members' %}
+               {% include 'ICD - JavaScript - Edit Board Members' %}
+            
+            {% elseif applicationType == "852b80b9-7de4-ef11-be21-6045bdf9be70"%}
+                <!-- BDP Course Application -->
+                <h2>{{ snippets["Application/BDPCourse/Title"] }} - {{EventName}}</h2>
+               {% webform name: 'BDP Course Application' %}
+               {% include 'ICD - JavaScript - Application Courses'%}
+               {% include 'ICD - JavaScript - Application - Account/Company Lookup'%}
+               
+            {% elseif applicationType == "4a1c7f0d-3ff3-ef11-be21-7c1e5206390e"%}
+                <!-- GEP Course Application -->
+               <h2>{{ snippets["Application/GEPCourse/Title"] }} - {{EventName}}</h2>
+               {% webform name: 'GEP' %}
+               {% include 'ICD - JavaScript - Application Courses'%}
+               {% include 'ICD - JavaScript - Application - Account/Company Lookup'%}
+            
+            {% elseif applicationType == "cdc1758c-1ff6-ef11-be20-6045bdf9994e"%}
+              <!-- ICD-RBC Foundation Scholarship -->
+              <h2>{{ snippets["Application/ICDRBC/Title"] }}</h2>
+              {% webform name: 'ICD-RBC Foundation Scholarship' %}
+              {% include 'ICD - JavaScript - Application Courses'%}
+              {% include 'ICD - JavaScript - Application - Account/Company Lookup'%}
+
+            {% elseif applicationType == "77259255-4887-ef11-ac20-6045bdcd6ad5"%}
+                <!-- Renew Individual Membership -->
+                <h2>{{ snippets["Application/RenewIM/Title"] }}</h2>
+               {% webform name: 'Renew Individual Membership' %}
+               {% include 'ICD - JavaScript - Individual Membership'%}
+               
+            {% elseif applicationType == "9efda25d-4887-ef11-ac20-6045bdcd6ad5"%}
+                <!-- Renew Board Membership -->
+                <h2>{{ snippets["Application/RenewBM/Title"] }}</h2>
+               {% webform name: 'Renew Board members' %}
+               {% include 'ICD - JavaScript - Renew Board Membership'%}
+
+            {% elseif applicationType == "dc5a1d8f-add8-ef11-a731-6045bdf9b61a" %}
+                <!-- DEP Scholarship Approved Application-->                
+                <h2>{{ snippets["Application/DEPCourseApproved/Title"] }}</h2>
+                {% include 'ICD Lookup Oral Exam CSS'%}
+                {% webform name: 'DEP Approved Application' %}
+                
+            {% elseif applicationType == "d1d2d89c-75b1-ef11-a72d-6045bdf9b61a" %}
+                <!-- DEP Approved Application -->
+                <h2>{{ snippets["Application/DEPCourseApproved/Title"] }}</h2>
+                {% include 'ICD Lookup Oral Exam CSS'%}
+                {% webform name: 'DEP Approved Application' %}
+                {% include 'ICD - JavaScript - DEP Approved Application'%}
+
+            {% elseif applicationType == "ac48e12d-8ea2-ef11-a72d-7c1e5206390e"%}
+                <h2>{{ snippets["Application/DEPCourseApp/Title"] }}</h2>
+                <!-- DEP Course-->
+                {% if applicationstatus == 100000008 or applicationstatus == 100000009 %}
+                    {% webform name: 'DEP Course Application Readonly' %}
+                {% else%}
+                    {% webform name: 'DEP Course Application' %}
+                    {% include 'ICD - JavaScript - DEP Course Application'%}
+                {%endif%}
+            {% elseif applicationType == "36b2af98-e9cc-ef11-a72e-7c1e5206390e"%}
+                <!-- Fellowship Award -->
+                <h2>{{ snippets["Application/FellowshipNominee/Title"] }}</h2>
+               {% webform name: 'Fellowship Award V2' %} 
+               {% include 'ICD - JavaScript - Fellowship Application'%}
+
+            {% elseif applicationType == "de9a1c89-add8-ef11-a731-6045bdf9b61a"%}
+                <!-- DEP Scholarship -->
+                
+                {% if request.path contains "fr-Fr" %}
+                   <h2>Bourse du PPA</h2>
+                {%else%}
+                    <h2>ICD-Rotman DEP Diversity Scholarship</h2>
+                {%endif%}
+                {% webform name: 'Scholarship Application' %}
+                {% include 'ICD - JavaScript - Application - Account/Company Lookup'%}
+                {% include 'ICD - JavaScript - DEP Course Application'%}
+                    
+            {% else%}
+            <!--Individual Membership -->
+                <h2>{{ snippets["Application/IndividualMembership/Title"] }}</h2>
+                {% webform name: 'Individual Membership' %}
+                {% include 'ICD - JavaScript - Individual Membership'%}
+            {%endif%}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% include 'ICD - JavaScript - Application Form'%}

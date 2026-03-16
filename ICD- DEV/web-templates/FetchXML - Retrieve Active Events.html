@@ -1,0 +1,37 @@
+{%fetchxml ActiveEvents%}
+<fetch>
+  <entity name="msevtmgt_event">
+    <attribute name="msevtmgt_name" />
+    <attribute name="msevtmgt_publishstatus" />
+    <filter>
+      <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000001" />
+    </filter>
+  </entity>
+</fetch>
+{%endfetchxml%}
+
+
+
+{%fetchxml GEPUpcomingEvents%}
+<fetch>
+  <entity name="msevtmgt_event">
+    <attribute name="msevtmgt_eventid" />
+    <attribute name="msevtmgt_name" />
+    <attribute name="msevtmgt_eventstartdate" />
+    <attribute name="msevtmgt_eventenddate" />
+    <attribute name="msevtmgt_stopwebsiteregistrationson" />
+    <attribute name="icd_deliverymethod" />
+    <order attribute="msevtmgt_name" descending="false" />
+    <filter type="and">
+      <condition attribute="msevtmgt_eventstartdate" operator="next-x-months" value="12" />
+      <condition attribute="icd_recordsubtype" operator="eq" value="100000007" />
+      <condition attribute="icd_recordtype" operator="eq" value="100000000" />
+      <condition attribute="icd_coursecode" operator="eq" uiname="GEP" uitype="icd_coursecode" value="{EE59CA74-7982-EF11-AC21-6045BDF99E57}" />
+    </filter>
+    <link-entity name="msevtmgt_building" from="msevtmgt_buildingid" to="msevtmgt_building" visible="false" link-type="outer" alias="a_38c645f92028ef11840b000d3af4fdf1">
+      <attribute name="msevtmgt_stateprovince" />
+      <attribute name="msevtmgt_city" />
+    </link-entity>
+  </entity>
+</fetch>
+{%endfetchxml%}

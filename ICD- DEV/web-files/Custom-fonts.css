@@ -1,0 +1,12 @@
+@font-face {
+    font-family: 'Avenir';
+    src: url('Avenir.eot?#iefix') format('embedded-opentype'),  url('Avenir.otf')  format('opentype'),
+    url('Avenir.woff') format('woff'), url('Avenir.ttf')  format('truetype'), url('Avenir.svg#Avenir') format('svg');
+    font-weight: normal;
+    font-style: normal;
+}
+p, a, button, h1, h2, td, li, label, input  {
+    font-family: 'Avenir' !important;
+}
+
+

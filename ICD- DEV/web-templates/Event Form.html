@@ -1,0 +1,605 @@
+{% include 'ICD - CSS'%}
+{% include 'ICD - Modal'%}
+{% include 'ICD Helper - WebAPI Wrapper AJAX' %}
+
+{% assign eventID = request.params['id' ] | default: "" %}
+{% assign event = entities['msevtmgt_event'][eventID] %}
+{% assign eventSubType = event.icd_recordsubtype.value %}
+{% assign currentDate = now | date_add_hours: -4 | date: "MM-dd-yyyy HH:mm" %}
+{% assign currentDates = now | date_add_hours: -4 | date: "yyyy-MM-dd HH:mm" %}
+{% assign refundCutOffDate = event.icd_refundcutoffdate | date: "yyyy-MM-dd HH:mm"  %}
+{% assign deliverymethod = event.icd_deliverymethod.value | default: 100000000 %}
+{% assign eventEndDate = event.msevtmgt_eventenddate | date: "MM-dd-yyyy HH:mm"  %}
+{% assign eventStartDate = event.msevtmgt_eventstartdate | date: "MM-dd-yyyy HH:mm" %}
+
+
+
+
+
+{% fetchxml EventTables %}
+   <fetch top="1">
+  <entity name="icd_eventtable">
+    <attribute name="icd_eventtableid" />
+		<attribute name="icd_name" />
+    <attribute name="modifiedon" />
+    <filter type="and">
+		<condition attribute="modifiedon" operator="on-or-after" value="{{currentDate}}" />
+    </filter>
+<order attribute="modifiedon" descending="true" />
+  </entity>
+</fetch>
+{% endfetchxml %}
+
+
+<script>
+
+	var eventTableIds = [];
+{% for EventTable in EventTables.results.entities %}
+    eventTableIds.push("{{EventTable.icd_name}}");
+    console.log("{{EventTable.icd_name}}","{{EventTable.modifiedon}}");
+{% endfor %}
+
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+{% if eventSubType != 100000002 %}
+    <!-- not conference -->
+  {% if deliverymethod == 100000000 %}<!-- in person -->
+
+    {% assign refundCutOffDate = event.msevtmgt_eventstartdate  | date_add_hours: -48 | date: "MM-dd-yyyy HH:mm"%}
+    {%  else %}
+
+      {% assign refundCutOffDate = event.msevtmgt_eventstartdate  | date_add_hours: -24 | date: "MM-dd-yyyy HH:mm"%}
+  {% endif %}
+{% endif %}
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-labelledby="loadingModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body text-center">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Generating your form, please wait...</p>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="timedAlert" class="mt-2 alert alert-info text-center d-none" role="alert">Generating your form!</div>
+
+<script>
+  sessionStorage.setItem("isConference", JSON.stringify(false));
+</script>
+{% fetchxml Events %}
+<fetch top="50">
+  <entity name="msevtmgt_event">
+    <attribute name="msevtmgt_eventid" />
+    <filter>
+      <condition attribute="statecode" operator="eq" value="0" />
+      <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000003" />
+      <condition attribute="msevtmgt_eventid" operator="eq" value="{{eventID}}" />
+    </filter>
+    <link-entity name="icd_msevtmgt_event_contact" from="msevtmgt_eventid" to="msevtmgt_eventid" link-type="inner" alias="PP" intersect="true">
+      <filter>
+        <condition attribute="contactid" operator="eq" value="{{user.id}}" />
+      </filter>
+    </link-entity>
+  </entity>
+</fetch>
+{% endfetchxml %}
+
+
+{% assign eventResults = Events.results %}
+{% assign eventCount = eventResults.entities.size  | default: 0 %}
+
+{% fetchxml EventsManager %}
+<fetch top="50">
+  <entity name="msevtmgt_event">
+    <attribute name="msevtmgt_eventid" />
+    <filter>
+      <condition attribute="statecode" operator="eq" value="0" />
+      <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000003" />
+      <condition attribute="msevtmgt_eventid" operator="eq" value="{{eventID}}" />
+    </filter>
+    <link-entity name="icd_msevtmgt_event_tablemanager" from="msevtmgt_eventid" to="msevtmgt_eventid" link-type="inner" alias="PP" intersect="true">
+      <filter>
+        <condition attribute="contactid" operator="eq" value="{{user.id}}" />
+      </filter>
+    </link-entity>
+  </entity>
+</fetch>
+{% endfetchxml %}
+
+
+{% assign  managereventCount = EventsManager.results.entities.size  | default: 0 %}
+
+<div class="row sectionBlockLayout text-start">
+  <div class="container">
+    <div class="row align-items-center mb-3">
+      <!-- Left: Back Button -->
+      <div class="col-6 d-flex justify-content-start">
+        
+      </div>
+
+      <!-- Right: Action Buttons - conference -->
+      {% if eventCount > 0 and eventSubType == 100000002 %}
+        <script>
+          sessionStorage.setItem("isConference", JSON.stringify(true));
+        </script>
+        <div class="col-6 d-flex justify-content-end gap-2">
+          <button onclick="editAttendies()" type="button" class="btn button1">{{ snippets["Conference/ManageMyEvent/AttendeeConferenceSelectionBtn"] }}</button>
+{% comment %}
+          {% if currentDates  < refundCutOffDate %}
+            <button onclick="confirmConference()" type="button" class="btn btn-secondary">{{ snippets["CancelText"] }}</button>
+          {% endif %}
+{% endcomment %}
+
+        </div>
+      {% endif %}
+
+    <!-- Form Area on Next Line -->
+    <div class="row">
+      <div class="col-12">
+        {% if eventCount > 0 %}
+          {% entityform name: 'Manage My Guest' %}
+        {% elseif managereventCount > 0 %}
+          {% entityform name: 'Manage My Guest (Table Manager)' %}
+        {% else %}
+          {% entityform name: 'Manage My Event' %}
+        {% endif %}
+      </div>
+      <div id="dateCheck"
+            data-current="{{ currentDate }}"
+            data-cutoff="{{ refundCutOffDate }}">
+      </div>
+      <div class="col-6" style="margin-top:10px;margin-bottom:10px;">
+        <button class="btn-primary" type="button"  onclick="window.location.href='{{ sitemarkers['My Events'].url }}'">{{ snippets["PreviousText"] }}</button>
+         <!-- Right: Action Buttons -->
+          {% if eventCount > 0 and eventSubType == 100000003 or  eventSubType == 100000004 %}
+            
+            {% if currentDate < refundCutOffDate %}
+              <button onclick="confirmNationalEvent()" type="button" class="btn btn-secondary ml-1">{{ snippets["CancelText"] }}</button>
+            {% endif %}
+			
+        {% endif %}
+
+		 {% if currentDates  < refundCutOffDate %}
+            <button onclick="confirmConference()" type="button" class="btn btn-secondary ml-1">{{ snippets["CancelText"] }}</button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--Ankur's Code End-->
+
+<script>
+
+	function editAttendies() {
+		$('#loadingModal').modal('show');
+		
+		var newApplication = {
+		  "icd_AppType@odata.bind": "/icd_applicationtypes(9c6e87af-b5ee-ef11-be21-6045bdf9b61a)",
+		  "icd_Contact@odata.bind": "/contacts({{user.id}})",
+		  "icd_Registrationfor@odata.bind": "/msevtmgt_events({{eventID}})",               
+		  "icd_deliverymethod": {{event.icd_deliverymethod.value}},
+		  "icd_firstname": "{{ user.firstname }}",
+		  "icd_lastname": "{{ user.lastname }}",
+		  "icd_email": "{{ user.emailaddress1 }}"
+
+		};
+
+		console.log("creating record");
+		webapi.safeAjax({
+		  type: "POST",
+		  contentType: "application/json",
+		  url: "/_api/icd_applications",
+		  data: JSON.stringify(newApplication),
+		  success: function (data, textStatus, xhr) {
+		   // $('#loadingModal').modal('hide');
+			// Upon successful creation, retrieve the ID of the new Multipayment Array
+			var newApplicationID = xhr.getResponseHeader("entityid"); // Assuming entityid is returned in the response header
+			console.log("Created Application Array ID: " + newApplicationID);
+			// Redirect the user
+			window.location.href = "/Application-Form/?id=" + newApplicationID
+		  },
+		  error: function (xhr, textStatus, errorThrown) {
+			$('#loadingModal').modal('hide');
+			// Display error message
+			console.log("error is " + xhr + "," + textStatus + "," + errorThrown);
+		  }
+		});
+	}
+  
+	function confirmConference()
+	{
+		let question = window.location.href.includes("fr-Fr")
+		  ? "Souhaitez-vous annuler votre inscription ?"
+		  : "Do you wish to cancel your registration?";
+		  
+		$("body").append(`
+		  <!-- Alert Modal -->
+		  <div class="modal fade" id="confirmModal" tabindex="-1" style="z-index:1056 !important"  aria-labelledby="confirmModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+			<div class="modal-dialog">
+			  <div class="modal-content">
+				<div class="modal-header">
+				  <h5 class="modal-title" id="confirmModalLabel">Confirm</h5>
+				</div>
+				<div class="modal-body">
+				  <span>${question}</span>
+				</div>
+				<div class="modal-footer">
+					<button type="button"  onclick="cancelConference()" class="btn custom-yes-btn" data-bs-dismiss="modal" aria-label="Yes">Yes</button>
+					<button type="button"  onclick="closeConfirm()" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="No">No</button>
+				</div>
+			  </div>
+			</div>
+		  </div>
+		`);
+
+		// Add styles for the Close button
+		$("<style>")
+			.prop("type", "text/css")
+			.html(`
+			  .custom-close-btn {
+				  background-color: #f26649;
+				  color: white;
+				  border: none;
+				  border-radius: 4px;
+				  padding: 5px 10px;
+				  cursor: pointer;
+			  }
+			  .custom-close-btn:hover {
+				  background-color: #d9534f;
+			  }
+			  .custom-yes-btn {
+				  background-color: #0053a1;
+				  color: white;
+				  border: none;
+				  border-radius: 4px;
+				  padding: 5px 10px;
+				  cursor: pointer;
+			  }
+			  .custom-yes-btn:hover {
+				  background-color: #002142;
+			  }
+			`)
+		.appendTo("head");
+			  
+		$("#confirmModal").modal('show');
+	}  
+  
+	function cancelConference()
+	{
+		$("#confirmModal").modal('show');
+		
+		$('#loadingModal').modal('show');
+		var cancelConfLink = "/_api/cloudflow/v1.0/trigger/cf1e93bf-4111-f011-998a-7c1e5206390e";
+		var data = {};
+		data["Purchaser"] = "{{user.id}}";
+		data["Event"] = "{{eventID}}";
+		var payload = {};
+		payload.eventData = JSON.stringify(data)
+
+		shell
+		.ajaxSafePost({
+			type: "POST",
+			contentType:"application/json",
+			url: cancelConfLink,
+			data: JSON.stringify(payload),
+			processData: false,
+			global:false,
+		})
+		.done(function (response) {
+			console.log(response);
+			$('#loadingModal').modal('hide');
+			// Assuming response is in the format {"response": "some-id"}
+			var responseObject = JSON.parse(response);
+
+			let message = window.location.href.includes("fr-Fr")
+			? "Votre demande d'annulation a été envoyée à l'ICD. Si elle est approuvée, vous recevrez un remboursement de votre paiement, déduction faite des frais administratifs."
+			: "Your cancellation request has been sent to ICD. If your request is approved, you will receive a refund of your payment minus administrative fees.";
+			// Append the modal structure dynamically to the body
+			$("body").append(`
+				<!-- Alert Modal -->
+				<div class="modal fade" id="alertModal" tabindex="-1" aria-labelledby="alertModalLabel"  style="z-index:1056 !important"  aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+					<div class="modal-dialog">
+						<div class="modal-content">
+							<div class="modal-header">
+								<h5 class="modal-title" id="alertModalLabel">Message</h5>
+							</div>
+							<div class="modal-body">
+								<span class="text-danger"> ${message}</span>
+							</div>
+							<div class="modal-footer">
+								<button type="button"  onclick="window.location.href='{{ snippets["Link/ICD.CA"] }}'" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="Close">Close</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			`);
+
+			// Add styles for the Close button
+			$("<style>")
+			.prop("type", "text/css")
+			.html(`
+				.custom-close-btn {
+				background-color: #f26649;
+				color: white;
+				border: none;
+				border-radius: 4px;
+				padding: 5px 10px;
+				cursor: pointer;
+				}
+				.custom-close-btn:hover {
+				background-color: #d9534f;
+				}
+			`)
+			.appendTo("head");
+
+			// Show the modal
+			$("#alertModal").modal('show');
+			// var id = responseObject.response; // Extract the id
+
+			// // Redirect the user to the desired URL
+			// var originUrl = window.location.origin;
+			// var redirectUrl = originUrl + "/Application-Form/?id=" + id;
+			// window.location.href = redirectUrl;
+		})
+		.fail(function (xhr, status, error) {
+			console.log("Failed:", status, error);
+			console.log("Response:", xhr.responseText);
+		});
+	}
+
+	function confirmNationalEvent()
+	{
+		let question = window.location.href.includes("fr-Fr")
+		  ? "Souhaitez-vous annuler votre inscription ?"
+		  : "Do you wish to cancel your registration?";
+		  
+		$("body").append(`
+		  <!-- Alert Modal -->
+		  <div class="modal fade" id="confirmModal" tabindex="-1" style="z-index:1056 !important"  aria-labelledby="confirmModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+			<div class="modal-dialog">
+			  <div class="modal-content">
+				<div class="modal-header">
+				  <h5 class="modal-title" id="confirmModalLabel">Confirm</h5>
+				</div>
+				<div class="modal-body">
+				  <span>${question}</span>
+				</div>
+				<div class="modal-footer">
+					<button type="button"  onclick="cancelNationalEvent()" class="btn custom-yes-btn" data-bs-dismiss="modal" aria-label="Yes">Yes</button>
+					<button type="button"  onclick="closeConfirm()" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="No">No</button>
+				</div>
+			  </div>
+			</div>
+		  </div>
+		`);
+
+		// Add styles for the Close button
+		$("<style>")
+			.prop("type", "text/css")
+			.html(`
+			  .custom-close-btn {
+				  background-color: #f26649;
+				  color: white;
+				  border: none;
+				  border-radius: 4px;
+				  padding: 5px 10px;
+				  cursor: pointer;
+			  }
+			  .custom-close-btn:hover {
+				  background-color: #d9534f;
+			  }
+
+			  .custom-yes-btn {
+				  background-color: #0053a1;
+				  color: white;
+				  border: none;
+				  border-radius: 4px;
+				  padding: 5px 10px;
+				  cursor: pointer;
+			  }
+			  .custom-yes-btn:hover {
+				  background-color: #002142;
+			  }							  
+			`)
+		.appendTo("head");
+			  
+		$("#confirmModal").modal('show');
+	}
+
+	function cancelNationalEvent()
+	{
+		$("#confirmModal").modal('hide');
+		
+		$('#loadingModal').modal('show');
+		
+		var cancelConfLink = "/_api/cloudflow/v1.0/trigger/c176815e-f61a-f011-998a-6045bdf9b61a";
+		var data = {};
+		data["Purchaser"] = "{{user.id}}";
+		data["Event"] = "{{eventID}}";
+		var payload = {};
+		payload.eventData = JSON.stringify(data)
+
+		shell
+		.ajaxSafePost({
+			type: "POST",
+			contentType:"application/json",
+			url: cancelConfLink,
+			data: JSON.stringify(payload),
+			processData: false,
+			global:false,
+		})
+		.done(function (response) {
+			console.log(response);
+			$('#loadingModal').modal('hide');
+			// Assuming response is in the format {"response": "some-id"}
+			var responseObject = JSON.parse(response);
+
+			let message = window.location.href.includes("fr-Fr")
+			? "Votre demande d'annulation a été envoyée à l'ICD. Si elle est approuvée, vous recevrez un remboursement de votre paiement, déduction faite des frais administratifs."
+			: "Your cancellation request has been sent to ICD. If your request is approved, you will receive a refund of your payment minus administrative fees.";
+
+			// Append the modal structure dynamically to the body
+			$("body").append(`
+			<!-- Alert Modal -->
+			<div class="modal fade" id="alertModal" tabindex="-1" style="z-index:1056 !important"  aria-labelledby="alertModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+				<div class="modal-dialog">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h5 class="modal-title" id="alertModalLabel">Message</h5>
+						</div>
+						<div class="modal-body">
+							<span class="text-danger"> ${message}</span>
+						</div>
+						<div class="modal-footer">
+							<button type="button"  onclick="window.location.href='{{ snippets["Link/ICD.CA"] }}'" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="Close">Close</button>
+						</div>
+					</div>
+				</div>
+			</div>
+			`);
+
+			// Add styles for the Close button
+			$("<style>")
+			.prop("type", "text/css")
+			.html(`
+				.custom-close-btn {
+					background-color: #f26649;
+					color: white;
+					border: none;
+					border-radius: 4px;
+					padding: 5px 10px;
+					cursor: pointer;
+				}
+				.custom-close-btn:hover {
+					background-color: #d9534f;
+				}
+			`)
+			.appendTo("head");
+
+			// Show the modal
+			$("#alertModal").modal('show');
+
+			// var id = responseObject.response; // Extract the id
+
+			// // Redirect the user to the desired URL
+			// var originUrl = window.location.origin;
+			// var redirectUrl = originUrl + "/Application-Form/?id=" + id;
+			// window.location.href = redirectUrl;
+		})
+		.fail(function (xhr, status, error) {
+			console.log("Failed:", status, error);
+			console.log("Response:", xhr.responseText);
+		});
+	}
+	
+	function closeConfirm()
+	{
+		$("#confirmModal").modal('hide');
+	}
+
+
+// (function () {
+//     console.log("🔥 Portal auto-sort watcher started.");
+
+//     // Watch for modal close (visibility change)
+//     const modal = document.querySelector("section.modal-form.modal-form-edit");
+//     if (!modal) {
+//         console.log("Modal section not found.");
+//         return;
+//     }
+
+//     const modalWatcher = new MutationObserver((mutations) => {
+//         mutations.forEach(m => {
+//             if (m.attributeName === "style" || m.attributeName === "class") {
+//                 const isHidden = modal.style.display === "none" || modal.classList.contains("fade");
+//                 if (isHidden) {
+//                     console.log("Modal closed → reloading page...");
+//                     location.reload(); // page reload triggers window.load for double-click
+//                 }
+//             }
+//         });
+//     });
+
+//     modalWatcher.observe(modal, { attributes: true, attributeFilter: ["style", "class"] });
+// })();
+
+
+	$(window).on('load', function()
+	{
+		console.log("test onload");
+		// Call checkAndHideRows() after 1 second
+		setTimeout(function() {
+			checkAndHideRows();
+			
+			// Call checkAndHideRows() again after 1 second
+			setTimeout(function() {
+				checkAndHideRows();
+			}, 1000); // 1 second delay
+		}, 1000); // 1 second delay
+
+		function checkAndHideRows() {
+			var rowCount = $('#EventTablesSubgrid table tbody tr').length; // Get row count
+			var parentRow = $('#EventTablesSubgrid').closest('tr'); // Get the parent <tr> of EventTablesSubgrid
+
+			console.log("Row count: " + rowCount); // Log row count
+
+			if (rowCount === 0) {
+			  parentRow.hide(); // Hide the parent <tr> if no rows are found
+			  console.log("No rows found. Hiding the parent <tr>.");
+			} else {
+			  parentRow.show(); // Show the parent <tr> if rows are found
+			  console.log("Rows found. Parent <tr> is visible.");
+			}
+		}
+		
+		var $button = $('.btn.button1');
+		var $target = $('fieldset[aria-label="Event Guests"], fieldset[aria-label="Invités à l’événement"]');
+		
+		if ($button.length && $target.length) {
+			$button.insertBefore($target);
+		}
+
+
+
+
+
+
+	// 	// --- New: Double-click Remaining Capacity after page reload ---
+    // const tryDoubleClick = () => {
+    //     const remainingCol = document.querySelector(
+    //         'div.entity-grid.subgrid a[aria-label="Remaining Capacity"]'
+    //     );
+    //     if (remainingCol) {
+    //         console.log("Remaining Capacity column ready → double-clicking");
+    //         remainingCol.click();
+    //         remainingCol.click();
+    //         console.log("Sorting completed.");
+    //     } else {
+    //         console.log("Remaining Capacity column not ready → retrying...");
+    //         setTimeout(tryDoubleClick, 200);
+    //     }
+    // };
+
+    // tryDoubleClick();
+
+
+	});
+	
+</script>

@@ -1,0 +1,269 @@
+<div class="container">
+  <div id="paypal-button-container"></div>
+  <p id="result-message"></p>
+  <!-- Replace for production the "test" client-id value with your client-id -->
+  <script src="{{settings['PayPalsrcJS']}}&locale=fr_CA"></script>
+</div>
+
+{% assign currentURL = request.path %}
+
+{% if currentURL contains "/Payments" %}
+  {% assign appID = request.params["id"] %}
+
+  {% assign application = entities.icd_application[appID] | default: ""  %}
+
+  {% assign appPaymentamount = application.icd_paymentamount %}
+
+  <!--Application Redirect URL's-->
+  {% assign applicationType = application.icd_apptype.id%}
+  {% assign AppTypeEntity = entities.icd_applicationtype[applicationType] | default: ""  %}
+  {% assign enURL = AppTypeEntity.icd_urlenglish | default: "https://icd.ca" %}
+  {% assign frURL = AppTypeEntity.icd_urlfrench  | default: "https://ias.ca"%}
+
+  {% include 'ICD - Invoice - Fetchxml' appID : appID %}
+  {% if queryInvoice.results.entities.size > 0 %}
+      
+      {% assign results = queryInvoice.results.entities.first %}
+      {% assign invoiceID= results.invoiceid %}
+      {% assign invoice = entities.invoice[invoiceID] | default: ""  %}
+      {% assign Paymentamount = invoice.totalamount %}
+
+  {%endif%}
+
+{%else%}
+
+  {% assign invoiceID= request.params["id"] %}
+  {% assign invoice = entities.invoice[invoiceID] | default: ""  %}
+  {% assign Paymentamount = invoice.totalamount %}
+  {% assign applicationId = invoice.icd_application.id %}
+  {% assign application = entities.icd_application[applicationId] | default: ""  %}
+
+  <!--Application Redirect URL's-->
+  {% assign applicationType = application.icd_apptype.id%}
+  {% assign AppTypeEntity = entities.icd_applicationtype[applicationType] | default: ""  %}
+  {% assign enURL = AppTypeEntity.icd_urlenglish | default: "https://icd.ca" %}
+  {% assign frURL = AppTypeEntity.icd_urlfrench  | default: "https://ias.ca"%} 
+
+{% endif %}
+
+
+
+    
+
+<script language="JavaScript">
+    var appPaymentamountString = '{{ Paymentamount | round: 2 | string | replace: ',', '.' | default: '0.00' }}';
+    var appPaymentamount = parseFloat(appPaymentamountString);
+    var invoiceID = "{{ invoiceID | default: '' }}";
+    var userid = "{{ user.id | default: '' }}" ;
+    
+    window.paypal.Buttons({
+      async createOrder() {
+        //$('#processing-message').show(); // Show processing message
+        document.getElementById('processingSpinner').style.display = 'block';
+        document.getElementById('spinnerOverlay').style.display = 'block';
+
+        const url = "{{ settings["Payments/PayPal/CreateOrderURL"] }}";
+
+        const payload = {
+          eventData: JSON.stringify({
+            amount: appPaymentamount,
+            invoiceId:invoiceID,
+            paidBy:userid
+          })
+        };
+        console.log("payload",payload)
+        var orderId;
+
+        await shell
+          .ajaxSafePost({
+            type: "POST",
+            contentType: "application/json",
+            url: url,
+            data: JSON.stringify(payload),
+            processData: false,
+            global: false,
+          })
+          .done(function (response) {
+            document.getElementById('processingSpinner').style.display = 'none';
+            document.getElementById('spinnerOverlay').style.display = 'none';
+            console.log("Test: ", response);
+            const orderData = JSON.parse(response);
+
+            let isError = false;
+
+            try {
+                const parsed = JSON.parse(orderData.order_id);
+
+                // If it has 'issue', it's an error object
+                if (parsed.issue) {
+                    isError = true;
+                    console.log("Payment error:", parsed.issue, parsed.description);
+                } else {
+                    // Otherwise assume it's a valid order ID
+                    orderId = orderData.order_id;
+                }
+            } catch (e) {
+                // order_id is a plain string, so treat it as order ID
+                orderId = orderData.order_id;
+            }
+
+            // Usage
+            if (isError) {
+                // Handle the error (you can reuse your `handlePayPalErrorFromResponse` here)
+                handlePayPalErrorFromResponse(orderData);
+                throw new Error("PayPal returned an error.");
+            } else {
+                // Proceed with valid order
+                console.log("Order ID:", orderId);
+            }
+          })
+          .fail(function (response) {
+            handlePayPalErrorFromResponse(response.responseText);
+          });
+
+        return orderId;
+
+      },
+      async onApprove(data, actions) {
+        document.getElementById('processingSpinner').style.display = 'block';
+        document.getElementById('spinnerOverlay').style.display = 'block';
+
+        const url = "{{ settings["Payments/PayPal/CaptureOrderURL"] }}";
+        const payload = {
+          eventData: JSON.stringify({
+            order_id: data.orderID
+          })
+        };
+
+        await shell
+          .ajaxSafePost({
+            type: "POST",
+            contentType: "application/json",
+            url: url,
+            data: JSON.stringify(payload),
+            processData: false,
+            global: false,
+          })
+          .done(function (response) {
+            document.getElementById('processingSpinner').style.display = 'none';
+            document.getElementById('spinnerOverlay').style.display = 'none';
+            console.log(`Capture response: ${response}`);
+            const flowResponse = JSON.parse(response);
+            const orderData = JSON.parse(flowResponse.order_data);
+            console.log(`Order data: ${orderData}`);
+            if (orderData.details) {
+              const errorDetail = orderData.details[0];
+
+              if (errorDetail.issue === "INSTRUMENT_DECLINED") {
+                // (1) Recoverable INSTRUMENT_DECLINED -> call actions.restart()
+                // recoverable state, per https://developer.paypal.com/docs/checkout/standard/customize/handle-funding-failures/
+                return actions.restart();
+              } else {
+                // (2) Other non-recoverable errors -> Show a failure message
+                throw new Error(`${errorDetail.description} (${orderData.debug_id})`);
+              };
+            };
+
+            if (!orderData.purchase_units)
+              throw new Error(JSON.stringify(orderData));
+
+            // (3) Successful transaction -> Show confirmation or thank you message
+            // Or go to another URL:  actions.redirect('thank_you.html');
+            const transaction =
+              orderData.purchase_units[0].payments.captures[0] ||
+              orderData.purchase_units[0].payments.authorizations[0];
+            resultMessage(
+              `Transaction ${transaction.status}: ${transaction.id}<br><br>`,
+            );
+
+            // Hide PayPal buttons after transaction completes
+            document.getElementById('paypal-button-container').style.display = 'none';
+
+            console.log(
+              "Capture result",
+              orderData,
+              JSON.stringify(orderData, null, 2),
+            );
+
+            // Get the current page URL
+            const currentURL = window.location.href;
+            // Determine redirection URL based on language in the URL
+            const targetURL = currentURL.includes("fr-FR") ? "{{ frURL }}" : "{{ enURL }}";
+
+            // Redirect the user
+            window.location.href = targetURL;
+            
+          })
+          .fail(function (response) {
+            handlePayPalErrorFromResponse(response.responseText);
+          });
+
+
+      }
+    })
+    .render("#paypal-button-container");
+
+    function resultMessage(message) {
+      const container = document.querySelector("#result-message");
+      
+      // Style the container for centering
+      container.style.textAlign = "center";
+      container.style.marginTop = "20px";
+      container.innerHTML = message;
+
+      // Create a button to navigate to the home page
+      const homeButton = document.createElement("button");
+      homeButton.innerHTML = "Go to Home Page";
+      homeButton.style.marginTop = "20px";  // Space between message and button
+      homeButton.style.backgroundColor = "#002142"; // Button color
+      homeButton.style.color = "white";  // Button text color
+      homeButton.style.padding = "10px 20px";  // Button padding
+      homeButton.style.border = "none";  // Remove border
+      homeButton.style.borderRadius = "5px";  // Rounded corners
+      homeButton.style.cursor = "pointer";  // Change cursor to pointer
+      homeButton.style.fontSize = "16px";  // Button font size
+      homeButton.style.display = "inline-block";  // Ensure proper button display
+
+      homeButton.onclick = function() {
+          window.location.href = '/';  // Update this if your home page has a different path
+      };
+
+      // Append the button to the result message container
+      container.appendChild(homeButton);
+    }
+  
+
+    function handlePayPalErrorFromResponse(response) {
+      document.getElementById('processingSpinner').style.display = 'none';
+      document.getElementById('spinnerOverlay').style.display = 'none';
+      $('.paypal-modal').fadeOut(); // Close modal
+
+      try {
+        const orderError = typeof response === 'string' ? JSON.parse(response) : response;
+        const parsedError = typeof orderError.order_id === 'string' 
+            ? JSON.parse(orderError.order_id) 
+            : orderError.order_id;
+
+        const issue = parsedError.issue || 'Unknown Error';
+        const description = parsedError.description || 'No description provided.';
+
+        // Show error message in alert block
+        const errorHTML = `<strong>${issue}:</strong> ${description}`;
+        $('#paypal-error-alert').html(errorHTML).fadeIn();
+
+        // Hide the alert after 10 seconds
+        setTimeout(() => {
+          $('#paypal-error-alert').fadeOut();
+        }, 10000);
+      } catch (e) {
+        console.error('Error parsing failed response', e);
+        $('#paypal-error-alert').html("Something went wrong. Please try again.").fadeIn();
+        setTimeout(() => {
+          $('#paypal-error-alert').fadeOut();
+        }, 10000);
+      }
+
+      // Change button text to "Retry"
+      $('.pay-now-btn').text('Réessayer');
+    }
+</script>

@@ -1,0 +1,39 @@
+{% assign sessionReg = entities['msevtmgt_sessionregistration'][request.params.id] %}
+{% assign eventSessionId = sessionReg.msevtmgt_sessionid.id %}
+{% assign eventId = sessionReg.msevtmgt_event.id %}
+{% assign evtSession = entities['msevtmgt_session'][eventSessionId] %}
+{% assign starttime = evtSession.msevtmgt_starttime %}
+{% assign sessionType = evtSession.msevtmgt_sessiontype.value %}
+
+{% assign cutoffDateFormatted = now | date_add_days: 14 | date: 'g' %}
+{% assign sessionStartFormatted = starttime | date: 'g' %}
+
+{% comment %}
+  Debug output (optional)
+  Cutoff Date: {{ cutoffDateFormatted }} <br/>
+  Session Start: {{ sessionStartFormatted }} <br/>
+  sessionType : {{sessionType}}
+{% endcomment %}
+
+{% block main %}
+<div class="container" style="display: flex; flex-wrap: wrap;">
+  <div class="col-lg-12 columnBlockLayout"
+       style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px;
+              word-break: break-word; padding: 16px; margin: 60px 0px;">
+
+    <!-- The entity form -->
+    <div id="EntityFormControl_8c3648fc1ff3ef11be217c1e5206390e">
+      <!-- ...the existing EntityForm code above goes here... -->
+      {% entityform name: 'Session Registration Details' %}
+    </div>
+
+    <!-- The condition checks if we should show Defer -->
+    {% if cutoffDateFormatted < sessionStartFormatted and sessionType == '100000014' or sessionType == '100000013' %}
+      <div style="margin-top: 20px; text-align: right;">
+        <button type="button" class="btn btn-secondary"
+         onclick="window.location.href='{{ sitemarkers['Application'].url | escape }}?formType=ba412832-32f3-ef11-be21-7c1e5206390e&eventId={{eventId}}&sessionType={{sessionType}}';">Defer</button>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

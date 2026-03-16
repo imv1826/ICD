@@ -1,0 +1,390 @@
+<style>
+/* General Invoice Styles */
+.invoice-container {
+    font-family: avenir !important;
+    color: #333;
+    max-width: 800px;
+    margin: 0 auto;
+    border: 1px solid #ddd;
+    padding: 20px;
+    background-color: #fff;
+    margin-top:30px;
+}
+
+.back-to-application {
+  margin-bottom: 10px;
+  padding: 10px;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 800px;
+}
+
+/* Back to Application icon
+.back-to-application {
+    margin-bottom: 10px; 
+    margin-left: 360px;
+}
+*/
+
+/* Header Section */
+.invoice-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.invoice-header .invoice-logo img {
+    max-width: 150px;
+}
+
+.invoice-header .invoice-details h1 {
+    margin: 0;
+    font-size: 24px;
+    color: #002855;
+}
+
+.invoice-header .invoice-details p {
+    margin: 0;
+    font-size: 14px;
+}
+.company-invoice-details {
+    display: flex;
+    justify-content: space-between; /* Ensures items are spaced apart */
+    align-items: center; /* Aligns items vertically */
+    margin-bottom: 20px;
+}
+
+.company-address {
+    flex: 1; /* Allows address to take up more space if needed */
+}
+
+.invoice-number {
+    flex-shrink: 0; /* Prevents the invoice number from shrinking */
+    text-align: right; /* Aligns text to the right */
+}
+
+.company-invoice-details p {
+    margin: 0; /* Removes default paragraph margins */
+    font-size: 14px; /* Sets consistent font size */
+    line-height: 1.5; /* Improves readability */
+}
+
+/* Address Section */
+.invoice-address {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.invoice-address .address {
+    display: flex;
+    width: 45%;
+    gap: 10px; /* Add space between the label and content */
+}
+
+.address-label {
+    flex-shrink: 0;
+}
+
+.address-label h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #002855;
+    white-space: nowrap; /* Prevent wrapping of "Sold To:" */
+}
+
+.address-content {
+    line-height: 1.5; /* Adjust spacing between address lines */
+    font-size: 14px;
+    margin: 0;
+    margin-right:100px;
+}
+.address-content p{
+    font-size: 15px !important;
+}
+/* Summary Table */
+.summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.summary-table th, .summary-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: left;
+}
+
+.summary-table th {
+    background-color: #f4f4f4;
+    color: #002855;
+    font-size: 14px;
+}
+
+.summary-table .right-align {
+    text-align: right;
+}
+
+.summary-table .total-label {
+    font-weight: bold;
+}
+
+.summary-table .total-amount {
+    font-size: 16px;
+    font-weight: bold;
+    color: #002855;
+}
+
+/* Notes Section */
+.invoice-notes {
+    margin-top: 20px;
+    font-size: 14px;
+    color: #555;
+}
+
+div#paymentMethodMessage {
+    margin: auto;
+    padding: inherit;
+    font-family: avenir !important;
+    margin-bottom: 30px !important;
+    max-width: 800px;
+    margin: 0 auto;
+    border: 1px solid #ddd;
+    padding: 20px;
+}
+/* Metadata Table Styles */
+.invoice-metadata {
+    margin-bottom: 20px;
+}
+
+.metadata-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.metadata-table th,
+.metadata-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.metadata-table th {
+    background-color: #f4f4f4;
+    color: #002855;
+    font-weight: bold;
+}
+
+.metadata-table td {
+    background-color: #fff;
+}
+.pay-now-container {
+    max-width: 800px;
+    margin: 0 auto;
+    margin-top: 10px;
+    margin-bottom:10px;
+    text-align: end;
+}
+.pay-now-btn {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.pay-now-btn:hover {
+    background-color: #0056b3; /* Darker shade on hover */
+}
+
+/* Modal Background (Blur Effect) */
+.paypal-modal {
+    display: none;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(8px); /* Adds the blur effect to the background */
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black overlay */
+    display: flex; /* Flexbox for centering */
+    align-items: center; /* Center vertically */
+    justify-content: center; /* Center horizontally */
+    z-index: 1000; /* Ensure it appears above other content */
+}
+
+/* Modal Content */
+.modal-content {
+    position: relative; /* Ensure proper positioning */
+    background-color: white;
+    padding: 20px;
+    border-radius: 10px; /* Rounded corners */
+    box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2); /* Subtle shadow */
+    max-width: 400px; /* Maximum width of modal */
+    width: 90%; /* Responsive width */
+    text-align: center;
+    z-index: 1100;
+    transform: translate(-50%, -25%); /* Center the modal */
+    top: 50%; /* Vertically centered */
+    left: 50%; /* Horizontally centered */
+    position: absolute; /* Use absolute positioning within the fixed parent */
+}
+
+span.close-modal {
+    position: absolute;
+    top: 1px;
+    right: 10px;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.invoice-message {
+    font-size: 14px;
+    margin: 0 auto;
+    font-family: avenir !important;
+    max-width: 800px;
+}
+
+
+/* Full-page overlay */
+#spinnerOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999; /* Ensures it appears above other elements */
+}
+
+/* Spinner container */
+#processingSpinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* The spinner animation */
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #ffffff; /* White border */
+    border-top: 5px solid transparent; /* Transparent top for spinning effect */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Spinner text styling (if needed) */
+.spinner-text {
+    color: #ffffff;
+    font-size: 16px;
+    margin-top: 10px;
+}
+
+/* Keyframe animation for the spinner */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+
+
+</style>
+
+
+
+
+{% fetchxml contactDetails %}
+        <fetch>
+            <entity name="invoice">
+                <attribute name="invoiceid" />
+                <attribute name="customerid"/>
+                <attribute name="icd_billtoacc"/>
+                <attribute name="billto_line1"/>
+                <attribute name="billto_line2"/>
+                <attribute name="billto_city"/>
+                <attribute name="billto_stateorprovince"/>
+                <attribute name="billto_postalcode"/>
+                <attribute name="billto_country"/>
+                <filter type="and">
+                    <condition attribute="icd_application" operator="eq" value="{{appID}}" />
+                    <condition attribute="createdon" operator="on-or-before" value="{{ now | date: 'o' }}" />
+                </filter>
+                <link-entity name="contact" from="contactid" to="customerid" alias="invContact">
+                    <attribute name="address1_line1" />
+                    <attribute name="address1_stateorprovince" />
+                    <attribute name="address1_postalcode" />
+                    <attribute name="address1_city" />
+                    <attribute name="address1_line2" />
+                    <attribute name="address1_country" />
+                </link-entity>
+            </entity>
+        </fetch>
+{% endfetchxml %}
+
+
+
+{% fetchxml queryInvoice %}
+    <fetch>
+        <entity name="invoice">
+            <attribute name="invoiceid" />
+            <attribute name="invoicenumber" />
+            <attribute name="totalamount" />
+            <attribute name="duedate" />
+            <filter type="and">
+                <condition attribute="icd_application" operator="eq" value="{{appID}}" />
+                <condition attribute="statecode" operator="eq" value="0" />
+                <condition attribute="createdon" operator="on-or-before" value="{{ now | date: 'o' }}" />
+            </filter>
+            <order attribute="totalamount" descending="true" />
+            <order attribute="duedate" descending="false" />
+        </entity>
+    </fetch>
+  {% endfetchxml %}
+  {% assign invResults = queryInvoice.results %}
+  {% assign invoiceid = invResults.entities[0].invoiceid %}
+
+
+  {% fetchxml queryInvoiceDetails %}
+        <fetch version="1.0" output-format="xml-platform" mapping="logical" distinct="false">
+            <entity name="invoicedetail">
+                <attribute name="productid" />
+                <attribute name="productname" />
+                <attribute name="quantity" />
+                <attribute name="priceperunit" />
+                <attribute name="baseamount" />
+                <attribute name="icd_gsthstamount" />
+                <attribute name="icd_qstpstamount" />
+                <attribute name="tax" />
+                <attribute name="invoicedetailid" />
+                <attribute name="icd_productname" />
+                <link-entity name="invoice" from="invoiceid" to="invoiceid" link-type="inner" alias="aa">
+                    <attribute name="totalamount" />
+                    <attribute name="totaldiscountamount" />
+                    <attribute name="invoiceid" />
+                    <attribute name="invoicenumber" />
+                    <attribute name="totaltax" />
+                    <attribute name="createdon" />
+                    <attribute name="totallineitemamount" />
+                    <attribute name="icd_purchaseorderno" />
+                    <attribute name="icd_totalqstpstamt" />
+                    <attribute name="icd_totalgsthstamt" />
+                    <order attribute="totalamount" descending="true" />
+                    <filter type="and">
+                        <condition attribute="icd_application" operator="eq" value="{{appID}}" />
+                        <condition attribute="createdon" operator="on-or-before" value="{{ now | date: 'o' }}" />
+                        <condition attribute="statecode" operator="ne" value="2" />
+                         <condition attribute="invoiceid" operator="eq" value="{{invoiceid}}"/>
+                       
+                    </filter>
+                </link-entity>
+            </entity>
+        </fetch>
+{% endfetchxml %}

@@ -1,0 +1,923 @@
+{% include 'ICD - Modal'%}
+{% assign AppID = application.id | default: "" %}
+{% assign eventId = application.icd_registrationfor.id | default: "" %}
+{% assign event = entities['msevtmgt_event'][eventId] %}
+{% assign tableAvailable = event.icd_eventtable | default: 0 %}
+{% assign evetMaxCapacity = event.msevtmgt_maximumeventcapacity | default: 0 %}
+{% assign RegistrationCount = event.msevtmgt_registrationcount | default: 0 %}
+{% assign tablesize = event.icd_individualtable | default: 0 %}
+{% assign numtablePurchased = application.icd_eventnumbertable | default: 0 %}
+{% assign IndividualTicketPurchased = application.icd_eventpurchasequantity | default: 0 %}
+{% assign eventTimeZone = event.msevtmgt_eventtimezonename | default: 0 %}
+{%- assign remainingIndividualCapacity = evetMaxCapacity | minus: RegistrationCount | default: 0 -%}
+{% assign language = "en-US" %}
+{% if request.path contains "fr-Fr" %}
+    {% assign language = "fr-Fr" %}
+{% endif %}
+
+
+{% assign currentContactRec = entities['contact'][user.id] %}
+{% assign today = "now" | date: "yyyy-MM-dd" %}
+
+{% assign totalTicketsPurchased = application.icd_numberoftickets | default: 0 %}
+{% assign individualTicket = application.icd_eventpurchasequantity | default: 0 %}
+{% assign maxCapacity = event.msevtmgt_maximumeventcapacity | default: 0 %}
+
+<script>
+
+// Function to sum the values of the two fields and display the result in icd_numberoftickets
+  function calculateTotalTickets() {
+      // Get the values of the two fields using jQuery
+      var purchaseQuantity = $("#icd_eventpurchasequantity").val();
+      var numberTable = $("#icd_eventnumbertable").val();
+
+      // Convert the values to numbers (if they are numeric)
+      var qty = parseFloat(purchaseQuantity);
+      var table = parseFloat(numberTable);
+
+      // If one field is empty, set it to 0 for calculation purposes
+      if (isNaN(qty)) {
+          qty = 0; // If purchaseQuantity is not a number, treat it as 0
+      }
+      if (isNaN(table)) {
+          table = 0; // If numberTable is not a number, treat it as 0
+      }
+
+      // Multiply the number of tables by 10
+      table *= {{tableSize}};
+
+      // Calculate the sum of the two fields (purchaseQuantity + modified numberTable)
+      var totalTickets = qty + table;
+      if(totalTickets > {{evetMaxCapacity }}){
+        $("#icd_eventpurchasequantity").val(0);
+        $("#icd_numberoftickets").val(0);
+        $("#icd_eventnumbertable").val(0);
+        showAlert('info', 'The maximum number of ticket is: {{ evetMaxCapacity }}');
+      }else{
+        // Display the result in the icd_numberoftickets field
+      $("#icd_numberoftickets").val(totalTickets);
+    
+    }
+
+  
+  }
+    //store portal user contactm in sessionvar
+    sessionStorage.setItem('userId', "{{user.id}}");
+    // Step 2: Store AppID in sessionStorage
+    sessionStorage.setItem('AppID', "{{ AppID }}");
+    sessionStorage.setItem('numtablePurchased', "{{ numtablePurchased }}");
+    sessionStorage.setItem("eventTimeZone", "{{ eventTimeZone }}");
+
+    sessionStorage.setItem("language", "{{ language }}");
+
+////////Step 2 code
+
+    {% fetchxml EventTableCounts %}
+        <fetch top="1000">
+            <entity name="icd_eventtable">
+            <attribute name="icd_eventtableid" />
+            <filter>
+                <condition attribute="icd_msevtmgt_event" operator="eq" value="{{eventId}}" />
+                <condition attribute="statecode" operator="eq" value="0" />
+            </filter>
+            </entity>
+        </fetch>
+    {% endfetchxml %}
+    {% assign EventTableCounts = EventTableCounts.results.entities.size | default: 0 %}
+    {%- assign remainingTableCapacity = tableAvailable | minus: EventTableCounts  | default: 0 -%}
+  
+
+    {% fetchxml galaTablePrices %}
+        <fetch top="50">
+            <entity name="productpricelevel">
+            <attribute name="amount" />
+            <attribute name="icd_regularprice" />
+            <attribute name="icd_lateprice" />
+            <filter>
+                <condition attribute="productid" operator="eq" value="{{event.icd_tableproduct.id}}"/>
+            </filter>
+            <link-entity name="pricelevel" from="pricelevelid" to="pricelevelid" link-type="inner">
+                <attribute name="icd_type" />
+                <attribute name="name" />
+                <attribute name="pricelevelid" />
+                <filter>
+                <condition attribute="icd_type" operator="contain-values">
+                    <value>100000000</value>
+                </condition>
+                </filter>
+            </link-entity>
+            </entity>
+        </fetch>
+
+    {% endfetchxml %}
+
+    function convertToEnglishAmount(amount) {
+        // Convert amount to a float first
+        let numericAmount = parseFloat(amount);
+    
+        if (isNaN(numericAmount)) {
+            return "Invalid amount"; // Handle invalid cases
+        }
+    
+        // Format the number in English format (thousands separators and dot for decimals)
+        return numericAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    }
+
+    var tablePrice = 0;
+    if( {{galaTablePrices.results.entities.size}} > 0){
+        {% for galaTablePrice in galaTablePrices.results.entities %}
+            var tablePrice = convertToEnglishAmount({{galaTablePrice.amount}});
+        {% endfor %}
+    }else
+    {
+        //console.log("no table price found");
+    }
+ 
+    {% fetchxml eligibleGuestTables %}
+        <fetch top="500">
+        <entity name="icd_guesttable">
+            <attribute name="icd_guesttableid" />
+            <filter>
+            <condition attribute="icd_application" operator="eq" value="{{AppID}}" />
+            <condition attribute="icd_event" operator="eq" value="{{eventId}}" />
+            </filter>
+        </entity>
+        </fetch>
+    {% endfetchxml %}
+    // Convert the Liquid array into a JSON-safe string
+    var guestTableIds = [];
+    {% if eligibleGuestTables.results.entities.size > 0 %}
+        {% for eligibleGuestTable in eligibleGuestTables.results.entities %}
+            guestTableIds.push("{{ eligibleGuestTable.icd_guesttableid | escape }}");
+        {%endfor %}
+    {%endif %}
+
+    //console.log("Guest Table IDs stored:", guestTableIds);
+    
+    // Store eligibleGuestTables in sessionStorage
+    sessionStorage.setItem("guestTableIds", JSON.stringify(guestTableIds));
+
+
+
+    $(window).on('load', function () {
+
+        var numTablePurchased = {{ numtablePurchased | default: 0 }};
+        if (numTablePurchased === 0 && $('table[data-name="GuestTableDetailSection"]').length) {
+        $('table[data-name="GuestTableDetailSection"]').hide();
+        console.log('Guest Table hidden because number of tables = 0');
+        }
+        
+        if ($('#icd_numberoftickets').length) {
+            $('#icd_numberoftickets').hide();
+            console.log('Field hidden successfully');
+        } else {
+            console.log('Field icd_numberoftickets not found');
+        }
+            //CODE FOR NUMBER OF TICKETS ON PORTAL
+              // Set default values to 0 only if the fields are empty or null
+        if ($("#icd_eventpurchasequantity").val() === "" || $("#icd_eventpurchasequantity").val() === null) {
+            $("#icd_eventpurchasequantity").val(0);
+        }
+        if ($("#icd_eventnumbertable").val() === "" || $("#icd_eventnumbertable").val() === null) {
+            $("#icd_eventnumbertable").val(0);
+        }
+        if ($("#icd_numberoftickets").val() === "" || $("#icd_numberoftickets").val() === null) {
+            $("#icd_numberoftickets").val(0);
+        }
+
+            //gray out 
+            $('#icd_numberoftickets').each(function () {
+                $(this).attr('style', function (i, style) {
+                    return (style || '') + 'background-color: #f2f2f2 !important;';
+                });
+            });
+
+        // Handle blur event for icd_eventpurchasequantity
+        $("#icd_eventpurchasequantity").on("blur", function() {
+            calculateTotalTickets(); // Recalculate total after enforcing max value
+            //handleMaxValue("#icd_eventpurchasequantity", maxEventpurchasequantity, "The limit for event purchase quantity is {maxValue}.");
+        });
+
+        $("#icd_eventnumbertable").on("blur", function() {        
+            calculateTotalTickets(); // Recalculate total after enforcing max value
+        });
+
+    //END OF CODE FOR NUMBER OF TICKETS ON PORTAL 
+        // Find the label inside the same <tr> and append 
+        // $("#icd_eventnumbertable_label").append(" ({{tablesize }} {{ snippets['Application/Conference/GuestPerTable'] }})")
+        //     .closest("td") // Move up to the parent <td>
+        //     .find(".description.above") // Find the description inside the same <td>
+        //     .prepend(tablePrice);
+         $("#icd_eventnumbertable_label").append(" ({{ snippets['Application/Conference/GuestPerTable'] }} {{tablesize }})")
+            .closest("td");
+
+
+        // Get the values from the form fields
+        var maxCapacityForQuantity = {{ remainingIndividualCapacity }};  // Maximum capacity for icd_eventpurchasequantity
+        var maxCapacityForTable = {{ remainingTableCapacity }};  // Maximum capacity for icd_eventnumbertable
+
+        // Function to check if user input exceeds max capacity
+        function checkCapacity() {
+            var eventPurchaseQuantity = parseInt($('#icd_eventpurchasequantity').val(), 10) || 0;  // Get the input value for event purchase quantity
+            var eventNumberTable = parseInt($('#icd_eventnumbertable').val(), 10) || 0;  // Get the input value for event number table
+
+            // Check if the quantity exceeds max capacity
+            if (eventPurchaseQuantity > maxCapacityForQuantity) {
+                showAlert("Error", "{{ snippets['Application/Conference/ExceedingIndividualCapacity'] }}");
+                $('#NextButton, #saveDraft').prop('disabled', true);
+            } else if (eventNumberTable > maxCapacityForTable) {
+                showAlert("Error", "{{ snippets['Application/Conference/ExceedingTableCapacity'] }}");
+                $('#NextButton, #saveDraft').prop('disabled', true);
+            } else if (eventPurchaseQuantity <= 0 && eventNumberTable <= 0) {
+                // Disable the buttons if both fields are <= 1
+                $('#NextButton, #saveDraft').prop('disabled', true);
+            } else {
+                // If no issues, enable the buttons
+                $('#NextButton, #saveDraft').prop('disabled', false);
+            }
+
+        }
+
+        // Bind the function to the input change event for the two fields
+        $('#icd_eventpurchasequantity, #icd_eventnumbertable').on('input', function () {
+            checkCapacity();  // Call the checkCapacity function on input change
+        });
+
+        // Initial check on page load
+        if ($('#icd_eventpurchasequantity').length > 0 || $('#icd_eventnumbertable').length > 0) {
+            checkCapacity();
+        }
+
+    });
+
+
+    $('<h5 style="padding-top: 10px; font-size:1.1rem;"></h5>').html(`{{ snippets["ICD/ConferenceApplication/GuestEdits/Text"] }}`).prependTo($("#icd_eventpurchasequantity_label").closest("td"));
+   $('<h5 style="padding-top: 10px; margin-left: 48px; margin-top: 35px; font-size:1.1rem;"></h5>').html(`{{ snippets["Application/Conference/Summary/Step"] }}`).prependTo('[data-name="Event_Summary"]');
+
+   // Injecting the Liquid variable into JS
+   var isTableRequired = {{ event.icd_istablerequired | json }};
+
+function toggleTableManagerFields() {
+    var eventNumber = parseInt($("#icd_eventnumbertable").val());
+
+    console.log("Checking event number:", eventNumber);
+    console.log("Is table required:", isTableRequired);
+
+    // Only show if event number >= 1 AND table is required
+    if (isNaN(eventNumber) || eventNumber < 1 || isTableRequired === false) {
+        console.log("Hiding table manager fields.");
+        $("#icd_tablemanagername, #icd_tablemanageremail, #icd_tablemanagerlastname").closest("tr").hide();
+        $('table[data-name="Event_Ticket_Details_section_3"]').closest('fieldset').hide();
+    } else {
+        console.log("Showing table manager fields.");
+        $("#icd_tablemanagername, #icd_tablemanageremail, #icd_tablemanagerlastname").closest("tr").show();
+        $('table[data-name="Event_Ticket_Details_section_3"]').closest('fieldset').show();
+    }
+}
+
+// Initial run
+toggleTableManagerFields();
+
+// Run whenever the input value changes
+$("#icd_eventnumbertable").on("input change", function () {
+    toggleTableManagerFields();
+});
+
+          function toggleNextButton() {
+        var emailField = $("#icd_tablemanageremail");
+        if (emailField.length > 0) {  // Check if field exists
+            emailField.prop('required', true);  // Add the "required" class
+            emailField.closest(".control").prev().addClass("required");
+            if (emailField.val() === "") {
+                $("#NextButton").prop("disabled", true);  // Disable the button
+            } else {
+                    $("#NextButton").prop("disabled", false);  // Enable the button
+            }
+        }
+        }
+
+    // Call the function initially to set the button state and field appearance
+    toggleNextButton();
+
+    // // Attach the function to the input field's keyup event to check as the user types
+    $("#icd_tablemanageremail").on('keyup', function() {
+        toggleNextButton();
+    });
+
+//     function toggleTableManagerFields() {
+//     var eventNumber = parseInt($("#icd_eventnumbertable").val());
+
+//     console.log("Checking event number:", eventNumber);
+
+//     if (isNaN(eventNumber) || eventNumber < 1) {
+//         console.log("Event number is less than 1 or not a number. Hiding table manager fields.");
+//         $("#icd_tablemanagername, #icd_tablemanageremail, #icd_tablemanagerlastname").closest("tr").hide();
+//     } 
+// }
+
+// // Initial run
+// toggleTableManagerFields();
+
+// // Run whenever the event number input changes
+// $("#icd_eventnumbertable").on("input change", function () {
+//     toggleTableManagerFields();
+// });
+
+////////Step 2 code end
+
+////////Step 3 code
+
+
+
+    var userInfo = {
+        firstname: "{{ user.firstname | default: '' | escape }}",
+        lastname: "{{ user.lastname | default: '' | escape }}",
+        email: "{{ user.emailaddress1 | default: '' | escape }}",
+        dietaryRestrictions: "{{ user.icd_dietaryrestrictions | default: '' | escape }}",
+        title: "{{ application.icd_jobtitle | default: '' | escape }}",
+        informalName: "{{ application.icd_informalname | default: '' | escape }}",
+        accessibility: "{{ application.icd_accessibilityneedsnew | default: '' | escape }}"
+    };
+
+    // Store in sessionStorage
+    sessionStorage.setItem("userInfo", JSON.stringify(userInfo));
+
+    //console.log("User Info stored in sessionStorage:", userInfo);
+
+
+
+
+
+    var contactData = [];
+
+    {% fetchxml guestContact %}
+    <fetch top="50">
+        <entity name="icd_guest">
+        <attribute name="icd_firstname" />
+        <filter>
+            <condition attribute="icd_application" operator="eq" value="{{AppID}}" />
+        </filter>
+        <link-entity name="contact" from="contactid" to="icd_contact" link-type="inner" alias="contact">
+            <attribute name="emailaddress1" />
+            <attribute name="icd_membershipstatus" />
+        </link-entity>
+        </entity>
+    </fetch>
+    {% endfetchxml %}
+    //console.log("the size is : {{guestContact.results.entities.size}}");
+
+    // Check if data exists before looping
+    {% if guestContact.results.entities.size > 0 %}
+        {% for guest in guestContact.results.entities %}
+
+            {% assign memtype =  guest['contact.icd_membershipstatus'] %}
+            var email = "{{ guest['contact.emailaddress1'] | default: '' }}";
+            contactData.push({
+                email: email,
+                membershipStatus: {{memtype.value}}
+            });
+        {% endfor %}
+         // Store the data in sessionStorage for global access
+        sessionStorage.setItem("contactData", JSON.stringify(contactData));
+        
+
+    {% else %}
+        //console.log("No guest contacts found.");
+    {% endif %}
+    //console.log("Session Storage Contact Data:", JSON.parse(sessionStorage.getItem("contactData")));
+
+
+
+    // Define an array to store the data
+    var conferenceData = [];
+    var conferenceSessionSelection = [];
+  
+    function extractDate(datetimeString) {
+    
+        let dateToParse = datetimeString;
+
+        // If French, swap dd and mm to make it MM/dd/yyyy
+        if ("{{language}}" === "fr-Fr") {
+            // Split date and time
+            const [datePart, timePart] = datetimeString.split(' ');
+            if (datePart) {
+                const parts = datePart.split('/'); // dd/MM/yyyy
+                if (parts.length === 3) {
+                    // Swap dd and MM → MM/dd/yyyy
+                    dateToParse = `${parts[1]}/${parts[0]}/${parts[2]}`;
+                    if (timePart) {
+                        dateToParse += ` ${timePart}`; // append time back
+                    }
+                }
+            }
+        }
+        
+
+        const dateObj = new Date(dateToParse);
+        if (isNaN(dateObj)) {
+            console.log("extracted date ",datetimeString)
+            return "Invalid Date";
+        }
+        const month = dateObj.getMonth() + 1; // Months are zero-based
+        const day = dateObj.getDate();
+        const year = dateObj.getFullYear();
+        
+        return `${month}/${day}/${year}`;
+    }
+
+
+        function extractDateTime(datetimeString) {
+        {% if language == "fr-Fr" %}
+            let dateToParse = datetimeString;
+
+            // Split date and time
+            const [datePart, timePart] = datetimeString.split(' - ');
+            if (datePart) {
+                const parts = datePart.split('/'); // dd/MM/yyyy
+                if (parts.length === 3) {
+                    // Swap dd and MM → MM/dd/yyyy
+                    dateToParse = `${parts[0]}/${parts[1]}/${parts[2]}`;
+                    if (timePart) {
+                        dateToParse += ` ${timePart}`; // append time back
+                    }
+                }
+            }
+        
+            
+            return dateToParse;
+        {% else %}
+             return datetimeString;
+        {% endif %}
+    }
+
+  //console.log("Fetching session Addon");
+  {% fetchxml ConferenceSelections %}
+    <fetch top="50">
+        <entity name="msevtmgt_session">
+            <attribute name="icd_conference" />
+            <attribute name="icd_product" />
+            <attribute name="msevtmgt_detaileddescription" />
+            <attribute name="msevtmgt_name" />
+            <attribute name="msevtmgt_sessioncode" />
+            <attribute name="msevtmgt_sessiontype" />
+            <attribute name="msevtmgt_endtime" />
+            <attribute name="msevtmgt_starttime" />
+            <attribute name="msevtmgt_sessionid" />
+            <attribute name="icd_audiencetype" />
+            <attribute name="icd_complimentary" />
+            <attribute name="icd_conferenceregistration" />
+            <attribute name="msevtmgt_sessionmaxcapacity" />
+            <attribute name="msevtmgt_registrationcount" />
+            <attribute name="icd_sessiontitlefr" />
+            <attribute name="icd_detaileddescriptionfr" />
+            <filter>
+                <condition attribute="msevtmgt_event" operator="eq" value="{{eventId}}" />
+
+                <condition attribute="statuscode" operator="eq" value="1" />
+                <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000003" />
+            </filter>
+        </entity>
+    </fetch>
+  {% endfetchxml %}
+
+  {% for ConferenceSelection in ConferenceSelections.results.entities %}
+      //console.log("For Each conference");
+      {% fetchxml ConferenceSelectionPrices %}
+        <fetch top="50">
+            <entity name="productpricelevel">
+                <attribute name="amount" />
+                <attribute name="discounttypeid" />
+                <attribute name="icd_earlyprice" />
+                <attribute name="icd_expirydate" />
+                <attribute name="icd_lateprice" />
+                <attribute name="icd_pricelistid" />
+                <attribute name="icd_regularprice" />
+                <attribute name="pricelevelid" />
+                <attribute name="productid" />
+                <attribute name="roundingoptionamount" />
+                <attribute name="productpricelevelid" />
+   
+                <filter>
+                    <condition attribute="productid" operator="eq" value="{{ConferenceSelection.icd_product.id}}" />
+                </filter>
+                <link-entity name="pricelevel" from="pricelevelid" to="pricelevelid" link-type="inner" alias="pricelevel">
+                    <attribute name="icd_type" />
+                    <filter>
+                        <condition attribute="statuscode" operator="eq" value="100001" />
+                    </filter>
+                </link-entity>
+            </entity>
+        </fetch>
+        {% endfetchxml %}
+        {% for ConferenceSelectionPrice in ConferenceSelectionPrices.results.entities %}
+
+                {% assign icd_type_values = ConferenceSelectionPrice['pricelevel.icd_type'] %}
+                {% comment %}
+                    {% assign varRequiredRegistration = ConferenceSelection['icd_requiredregistration'] %}
+                    console.log("msevtmgt_sessionmaxcapacity {{ConferenceSelection.msevtmgt_sessionmaxcapacity }}");
+                    console.log("requiredRegistration {{ConferenceSelection.requiredRegistration }}");
+                    console.log("msevtmgt_registrationcount {{ConferenceSelection.msevtmgt_registrationcount }}"); 
+                {% endcomment %}
+                
+            var wDate = extractDate("{{ ConferenceSelection.msevtmgt_starttime }}");
+            var conferenceSelectionData = {
+                sessionId: "{{ConferenceSelection.msevtmgt_sessionid}}",
+                title: "{{ConferenceSelection.msevtmgt_name}}",
+                description: "{{ConferenceSelection.msevtmgt_detaileddescription}}",
+                price: parseFloat({{ ConferenceSelectionPrice.amount }}).toFixed(2),
+                date :  wDate,
+                time: extractDateTime("{{ConferenceSelection.msevtmgt_starttime }}") +" - " + extractDateTime("{{ConferenceSelection.msevtmgt_endtime}}"),
+                timeStr: "{{ConferenceSelection.msevtmgt_starttime | date: "hh:mm tt"}} - {{ConferenceSelection.msevtmgt_endtime | date: "hh:mm tt"}}",
+                MembershipType:  "{% for option in icd_type_values %}{{ option.Value }}{% unless forloop.last %},{% endunless %}{% endfor %}",
+                audienceType: "{{ConferenceSelection.icd_audiencetype.value}}",
+                remainingCapacity: parseInt("{{ConferenceSelection.msevtmgt_sessionmaxcapacity}}") - parseInt("{{ConferenceSelection.msevtmgt_registrationcount}}"), // Remaining capacity
+                conferenceregistrationRequired: "{{ConferenceSelection.icd_conferenceregistration}}" ,
+                complimentary: "{{ConferenceSelection.icd_complimentary}}", // Boolean value for Complimentary
+                SessionType: "{{ConferenceSelection.msevtmgt_sessiontype.value}}",
+                RegistrationCount: parseInt("{{ConferenceSelection.msevtmgt_registrationcount}}"),
+                SessionMaxCapacity: parseInt("{{ConferenceSelection.msevtmgt_sessionmaxcapacity}}"),
+                SessionCode: "{{ConferenceSelection.msevtmgt_sessioncode}}",
+                SessionTitleFr: "{{ConferenceSelection.icd_sessiontitlefr}}",
+                SessionDescriptionFr: "{{ConferenceSelection.icd_detaileddescriptionfr}}"
+
+            };
+
+            conferenceSessionSelection.push(conferenceSelectionData);
+        {% endfor %}
+    {% endfor %}
+
+
+    //fetch all event session without a product ID
+      //console.log("Fetching session Addon");
+    {% fetchxml ConferenceSelectionsWP %}
+    <fetch top="50">
+        <entity name="msevtmgt_session">
+            <attribute name="icd_conference" />
+            <attribute name="icd_product" />
+            <attribute name="msevtmgt_detaileddescription" />
+            <attribute name="msevtmgt_name" />
+            <attribute name="msevtmgt_sessioncode" />
+            <attribute name="msevtmgt_sessiontype" />
+            <attribute name="msevtmgt_endtime" />
+            <attribute name="msevtmgt_starttime" />
+            <attribute name="msevtmgt_sessionid" />
+            <attribute name="icd_audiencetype" />
+            <attribute name="icd_complimentary" />
+            <attribute name="icd_conferenceregistration" />
+            <attribute name="msevtmgt_sessionmaxcapacity" />
+            <attribute name="msevtmgt_registrationcount" />
+            <attribute name="icd_sessiontitlefr" />
+            <attribute name="icd_detaileddescriptionfr" />
+                
+            <filter>
+                <condition attribute="msevtmgt_event" operator="eq" value="{{eventId}}" />
+                    <condition attribute="icd_product" operator="null" value="" />
+                <condition attribute="statuscode" operator="eq" value="1" />
+                <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000003" />
+            </filter>
+        </entity>
+    </fetch>
+    {% endfetchxml %}
+    {% for ConferenceSelectionWP in ConferenceSelectionsWP.results.entities %}
+        var wDate = extractDate("{{ ConferenceSelectionWP.msevtmgt_starttime }}");
+            var conferenceSelectionData = {
+            sessionId: "{{ConferenceSelectionWP.msevtmgt_sessionid}}",
+            title: "{{ConferenceSelectionWP.msevtmgt_name}}",
+            description: "{{ConferenceSelectionWP.msevtmgt_detaileddescription}}",
+            price: 0.00,
+            date :  wDate,
+            time: extractDateTime("{{ConferenceSelectionWP.msevtmgt_starttime}}") + " - " + extractDateTime( "{{ConferenceSelectionWP.msevtmgt_endtime}}"),
+            timeStr: "{{ConferenceSelectionWP.msevtmgt_starttime | date: "hh:mm tt"}} - {{ConferenceSelectionWP.msevtmgt_endtime | date: "hh:mm tt"}}",
+            MembershipType:  "",
+            audienceType: "{{ConferenceSelectionWP.icd_audiencetype.value}}",
+            remainingCapacity: parseInt("{{ConferenceSelectionWP.msevtmgt_sessionmaxcapacity}}") - parseInt("{{ConferenceSelectionWP.msevtmgt_registrationcount}}"), // Remaining capacity
+            conferenceregistrationRequired: "{{ConferenceSelectionWP.icd_conferenceregistration}}" ,
+            complimentary: "{{ConferenceSelectionWP.icd_complimentary}}", // Boolean value for Complimentary
+                SessionType: "{{ConferenceSelectionWP.msevtmgt_sessiontype.value}}", 
+                RegistrationCount: parseInt("{{ConferenceSelectionWP.msevtmgt_registrationcount}}"),
+                SessionMaxCapacity: parseInt("{{ConferenceSelectionWP.msevtmgt_sessionmaxcapacity}}"),
+                SessionCode: "{{ConferenceSelectionWP.msevtmgt_sessioncode}}",
+                SessionTitleFr: "{{ConferenceSelectionWP.icd_sessiontitlefr}}",
+                SessionDescriptionFr: "{{ConferenceSelectionWP.icd_detaileddescriptionfr}}"
+        };
+        conferenceSessionSelection.push(conferenceSelectionData);
+  {% endfor %}
+    //console.log(conferenceSessionSelection);
+    // Save the conference session selection in localStorage (for global access across pages)
+    localStorage.setItem("AddonSession", JSON.stringify(conferenceSessionSelection));
+  
+    console.log("Session data saved to localStorage:", conferenceSessionSelection);
+    
+
+    $(window).on('load', function () {
+
+
+
+         if ($('#abandonApplicaiton').length) {
+        // Change the Abandon button text to 'Abandon Registration'
+        $('#abandonApplicaiton').text("{{ snippets['Application/ConferenceCopy/AbandonRegistrationBtn'] }}");
+    }
+
+     if ($('#saveDraft').length) {
+        // Change the Save Draft button text to 'Save Draft And Exit'
+        $('#saveDraft').text("{{ snippets['Application/Conference/SaveDraftExitBtn'] }}");
+    }
+
+
+     if ($('#applyCouponButton').length) {
+        // Change the Promo Code  button text to Apply Promotion
+        $('#applyCouponButton').text("{{ snippets['Application/Conference/ApplyPromoBtn'] }}");
+    }
+
+// Find the tables (but also check visibility)
+let guestTable = $('table[data-name="GuestTableDetailSection"]');
+let guestTableVisible = $('table[data-name="GuestTableDetailSection"]:visible'); // visible version
+let fallbackTable = $('table[data-name="GuestDetailsSection"]');
+
+// Determine where to insert:
+// prefer the visible GuestTableDetailSection; if it's hidden or not present, use the fallback
+let targetFieldset = guestTableVisible.length ? guestTableVisible : (fallbackTable.length ? fallbackTable : guestTable);
+
+// Prepare message
+let attendeeMessage = `{{ snippets['Application/Conference/ContactDetails'] }}`;
+let individualTickets = "{{ IndividualTicketPurchased }}"; // Liquid variable
+let updatedMessage = attendeeMessage.replace("[X]", individualTickets);
+
+// Base CSS
+let messageStyle = {
+    "display": "block",
+    "margin-bottom": "10px"
+};
+
+// Add extra margin only if the visible guest table is the one being used
+if (guestTableVisible.length && targetFieldset.is(guestTableVisible)) {
+    messageStyle["margin-top"] = "15px"; // or whatever margin you want
+}
+
+if (targetFieldset && targetFieldset.length) {
+    $('<div></div>').html(updatedMessage).css(messageStyle).prependTo(targetFieldset);
+} else {
+    console.warn('No suitable target found for inserting message.');
+}
+
+        // Check if the table with data-name="GuestDetailsSection" exists
+        if ($('table[data-name="GuestDetailsSection"]').length) {
+
+            let attendeeMessage = `{{ snippets['Application/Conference/ContactDetails'] }}`;
+            let attendeeMessages = `{{ snippets['Application/Conference/ContactDetailss'] }}`;
+           
+            // Replace [X] with the Liquid variable
+            let individualTickets = "{{ IndividualTicketPurchased }}"; // Liquid variable
+
+            // Update the string dynamically
+            let updatedMessage = attendeeMessage.replace("[X]", individualTickets);
+
+            // Inject the updated text into the page
+            $("#attendeeText").text(updatedMessage);
+            //console.log(updatedMessage);
+            // Find the "Create" button and append the help text
+            // Check if the button exists before appending the help text
+            let createButton = $('.create-action');
+            if ($("a.create-action").length) {
+                //console.log("Button exists!");
+            } else {
+                //console.log("Button does not exist.");
+            }
+
+            if (createButton.length) {
+                //console.log("button exist");
+                //createButton.addClass("float-end");
+                // Append the help text inside a new <p> tag after the button
+                // $('<h5"></h5>').text(updatedMessage).insertBefore(createButton.parent().parent());
+                // $('<h5"></h5>').text(attendeeMessages).insertBefore(createButton.parent().parent());
+
+                // $('<h5></h5>').text(updatedMessage).css({
+                //     "margin-bottom": "10px",  // Adds spacing below the first <h5>
+                //     "padding": "5px 5px"        // Optional padding
+                // }).insertBefore(createButton.parent().parent());
+
+                // $('<h5></h5>').text(attendeeMessages).css({
+                //     "margin-bottom": "10px",
+                //     "padding": "5px 5px"
+                // }).insertBefore(createButton.parent().parent());
+            }        
+            
+            
+
+
+                        
+        }
+        
+
+        if ($('div[data-name="ConferenceSelection"].tab.clearfix').length > 0) {
+            //console.log('ConferenceSelection tab found. Inserting instruction text.');
+            let SessionSelectionInstruction = `{{ snippets['Application/Conference/SessionSelection'] }}`;
+            $('<h5></h5>').html(SessionSelectionInstruction).css({
+                "margin-bottom": "10px",
+                "padding": "5px 5px",
+                "font-size": "1.1rem"
+            }).insertBefore($('div[data-name="ConferenceSelection"].tab.clearfix'));
+
+           // console.log('Instruction text inserted successfully.');
+        } else {
+           //console.warn('ConferenceSelection tab not found. Skipping insertion.');
+        }
+            
+        var numberOfGuess = 0;
+
+        // Function to calculate the total quantity
+        function validateTotalQuantity() {
+            // Get the updated session addon data
+            const sessionAddonData = JSON.parse($('#icd_sessionaddon').val() || '[]');
+
+            // Calculate the total quantity
+            const totalQuantity = sessionAddonData.reduce((sum, item) => sum + item.quantity, 0);
+
+            // Check if the total exceeds the limit
+            if (totalQuantity > 10) {
+                showAlert('error', 'You are exceeding the number of tickets allowed!');
+            }
+        }
+
+        // Event listener for quantity input changes
+        $(document).on('input', '.quantity-input', function () {
+            const sessionIndex = $(this).data('session-index');
+            const quantity = parseInt($(this).val(), 10) || 0;
+            const sessionId = conferenceSessionSelection[sessionIndex].sessionId;
+
+            // Get the existing session addon data from the hidden field
+            let sessionAddonData = JSON.parse($('#icd_sessionaddon').val() || '[]');
+
+            // Check if the session already exists in the session addon data
+            const existingSession = sessionAddonData.find(item => item.sessionId === sessionId);
+
+            if (existingSession) {
+                // If it exists, update the quantity
+                existingSession.quantity = quantity;
+            } else {
+                // Otherwise, add a new session
+                if (quantity > 0) {
+                    sessionAddonData.push({ sessionId: sessionId, quantity: quantity });
+                }
+            }
+
+            // Remove sessions with a quantity of 0
+            sessionAddonData = sessionAddonData.filter(item => item.quantity > 0);
+
+            // Update the hidden field with the new JSON data
+            $('#icd_sessionaddon').val(JSON.stringify(sessionAddonData));
+
+            // Validate total quantity
+            validateTotalQuantity();
+        });
+        /*
+<------------Validate number of Guest-------------------->
+
+*/
+
+        
+    let isGuestCountValid = false;
+    let isTicketTypeValid = false;
+
+    // ---------------------- FUNCTION: Check Number of Guests ----------------------
+    function chknumberOfGuess() {
+        if ($('table[data-name="GuestDetailsSection"]').length) {
+            for (let i = 0; i < 5; i++) {
+                $.ajax({
+                    url: "/_api/icd_guests?$count=true&$filter=_icd_application_value eq {{AppID}} and (icd_addtogalatable ne true or icd_conferencetype ne 100000001) and statecode eq 0 &$select=icd_guestid",
+                    type: "GET",
+                    cache: true,
+                    async: false,
+                    success: function (data) {
+                        numberOfGuess = data['@odata.count'];
+                    },
+                    error: function () {
+                        console.error("Error fetching data for request #" + (i + 1));
+                    }
+                });
+            }
+
+            const IndividualTicketPurchased = {{ IndividualTicketPurchased | json }};
+            let tableSeat = {{ numtablePurchased }} * {{ tablesize }};
+            sessionStorage.setItem('tableSeat', tableSeat);
+
+            tableSeat = isNaN(tableSeat) ? 0 : tableSeat;
+            const maxPurchasedCapacity = tableSeat + IndividualTicketPurchased;
+
+            if (numberOfGuess >= maxPurchasedCapacity) {
+                $('.create-action').hide();
+            } else {
+                $('.create-action').show();
+            }
+
+            // ✅ determine if valid guest count
+            isGuestCountValid = !(numberOfGuess < IndividualTicketPurchased || numberOfGuess > maxPurchasedCapacity);
+
+        } else {
+            for (let i = 0; i < 5; i++) {
+                $.ajax({
+                    url: "/_api/icd_guests?$count=true&$filter=_icd_application_value eq {{AppID}} and icd_conferencetype eq null&$select=icd_guestid",
+                    type: "GET",
+                    cache: true,
+                    async: false,
+                    success: function (data) {
+                        numberOfGuess = data['@odata.count'];
+                    },
+                    error: function () {
+                        console.error("Error fetching data for request #" + (i + 1));
+                    }
+                });
+            }
+
+            isGuestCountValid = (numberOfGuess === 0);
+        }
+
+        updateNextButtonState();
+    }
+
+   // ---------------------- FUNCTION: Validate Ticket Type ----------------------
+    function validateTicketType() {
+        const ticketTypeCells = $('[data-th="Ticket Type"], [data-th="Type de congrès"]');
+
+        if (ticketTypeCells.length) {
+            let hasEmptyCell = false;
+            ticketTypeCells.each(function () {
+                const cellContent = $(this).text().trim();
+                if (cellContent === '') {
+                    hasEmptyCell = true;
+                    return false;
+                }
+            });
+
+            if (hasEmptyCell) {
+                isTicketTypeValid = false;
+                if (typeof showAlert === "function") {
+                       AlertPopup( "{{ snippets['Application/Conference/TicketType'] }}", "OK", function() {
+
+                });
+                } else {
+                    console.warn('Ticket Type needs to be filled for all guests!');
+                }
+                console.log('Ticket Type invalid');
+            } else {
+                isTicketTypeValid = true;
+                console.log('Ticket Type valid');
+            }
+        } else {
+            isTicketTypeValid = true; // assume valid if field not present
+        }
+
+        updateNextButtonState();
+    }
+
+    // ---------------------- FUNCTION: Combined Button Logic ----------------------
+    function updateNextButtonState() {
+        const nextButton = $('#NextButton');
+        const saveDraft = $('#saveDraft');
+
+        // Only enable if both validations pass
+        const enableButton = (isGuestCountValid && isTicketTypeValid);
+
+        nextButton.prop('disabled', !enableButton);
+        saveDraft.prop('disabled', !enableButton);
+
+        console.log('Button state updated:', enableButton ? 'enabled' : 'disabled');
+    }
+
+    // ---------------------- INITIAL EXECUTION ----------------------
+    if ($('table[data-name="GuestDetailsSection"]').length) {
+        chknumberOfGuess();
+        validateTicketType();
+    }
+
+    if ($('table[data-name="ConferenceSelection"]').length) {
+        sessionStorage.setItem("simultaneousSessionErrorMsg", "{{ snippets['Application/Conference/simultaneousSessionError'] }}");
+    }
+
+    // ---------------------- OBSERVER ----------------------
+    let count = 0;
+    const targetNode = document.getElementById('Guest');
+    const config = { childList: true, subtree: true };
+
+    const callback = function (mutationsList) {
+        mutationsList.forEach(function (mutation) {
+            if (mutation.type === 'childList') {
+                count++;
+                chknumberOfGuess();
+                validateTicketType();
+                console.log('Mutation observed:', count);
+                return false;
+            }
+        });
+    };
+
+    const observer = new MutationObserver(callback);
+    if (targetNode) {
+        observer.observe(targetNode, config);
+    }
+
+});
+
+
+
+</script>

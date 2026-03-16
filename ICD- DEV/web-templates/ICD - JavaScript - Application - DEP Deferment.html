@@ -1,0 +1,332 @@
+{% include 'ICD - Modal'%}
+{% assign AppID = application.id | default: "" %}
+{% assign AppEventsessiontype = application.icd_sessiontype.value | default: "" %}
+{% assign eventId = application.icd_registrationfor.id | default: "" %}
+{% assign event = entities['msevtmgt_event'][eventId] %}
+{% assign eventStartDate = event.msevtmgt_eventstartdate |  date: "yyyy-MM-dd HH:mm"%}
+{% assign eventStartDateAcademicYr = event.msevtmgt_eventstartdate | date_add_days: -365 |  date: "yyyy-MM-dd" %}
+{% assign eventEndDateAcademicYr = event.msevtmgt_eventstartdate| date_add_days: 365 |  date: "yyyy-MM-dd"  %}
+{% assign eventTimeZone = event.msevtmgt_eventtimezonename | default: 0 %}
+{% assign currentDateTime = now | date: "yyyy-MM-ddTHH:mm:ssZ" %}
+{% assign language = "en-US" %}
+{% if request.path contains "fr-Fr" %}
+    {% assign language = "fr-Fr" %}
+{% endif %}
+{% assign currentDatePlus15 = now | date_add_days: 15 |  date: "yyyy-MM-dd HH:mm" %}
+
+
+
+
+<script>
+   
+    // Define an array to store the data
+    var EligibleEventSession = [];
+    var purchasedEventSession = [];
+
+    //Convert localized date string (English or French) to a valid ISO format JavaScript understands
+    function convertDateFormat(inputDate) {
+        //console.log("Date conversion function called with date:", inputDate);
+
+        {% if language == "en-US" %}
+            // Expected format: MM/DD/YYYY hh:mm:ss AM/PM
+            var parts = inputDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}) (\d{1,2}):(\d{2}):(\d{2}) (AM|PM)$/i);
+            if (!parts) return null;
+
+            let month = parseInt(parts[1]) - 1; // JavaScript months are 0-based
+            let day = parseInt(parts[2]);
+            let year = parseInt(parts[3]);
+            let hour = parseInt(parts[4]);
+            let minute = parseInt(parts[5]);
+            let second = parseInt(parts[6]);
+            let ampm = parts[7].toUpperCase();
+
+            if (ampm === "PM" && hour < 12) hour += 12;
+            if (ampm === "AM" && hour === 12) hour = 0;
+
+            return new Date(year, month, day, hour, minute, second); // returns valid Date object
+
+        {% else %}
+            // Expected format: DD/MM/YYYY HH:mm:ss (24-hour format)
+            var parts = inputDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}) (\d{1,2}):(\d{2}):(\d{2})$/);
+            if (!parts) return null;
+
+            let day = parseInt(parts[1]);
+            let month = parseInt(parts[2]) - 1;
+            let year = parseInt(parts[3]);
+            let hour = parseInt(parts[4]);
+            let minute = parseInt(parts[5]);
+            let second = parseInt(parts[6]);
+
+            return new Date(year, month, day, hour, minute, second);
+        {% endif %}
+    }    
+
+
+    // Function to determine the academic year start and end based on an event date
+    function getAcademicYearForEvent(eventDate) {
+        var event = new Date(eventDate);
+        event.setHours(0, 0, 0, 0); // Normalize time
+
+        var startYear = event.getFullYear();
+        var endYear = startYear + 1;
+
+        var academicYearStart = new Date(startYear, 6, 1); // July 1
+        var academicYearEnd = new Date(endYear,5, 30); // June 30
+
+
+        if (event < academicYearStart) {
+            startYear -= 1;
+            endYear -= 1;
+            academicYearStart = new Date(startYear, 6, 1);
+            academicYearEnd = new Date(endYear, 5, 30);
+        }
+
+        academicYearStart.setHours(0, 0, 0, 0);
+        academicYearEnd.setHours(23, 59, 59, 0);
+        // Log raw dates
+        //console.log("Raw academicYearStart:", academicYearStart);
+        //console.log("Raw academicYearEnd:", academicYearEnd);
+
+        // Local format function
+        function formatDateLocal(date) {
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        const formattedStartDate = formatDateLocal(academicYearStart);
+        const formattedEndDate = formatDateLocal(academicYearEnd);
+
+        //onsole.log("Formatted academicYearStart:", formattedStartDate);
+        //console.log("Formatted academicYearEnd:", formattedEndDate);
+
+        return {
+            start: formattedStartDate,
+            end: formattedEndDate
+        };
+    }
+ 
+
+    function formatDateByBrowserLocale(date) {
+        return new Date(date).toLocaleString(navigator.language, {
+            year: 'numeric',
+            month: '2-digit',  // Two-digit month (e.g., '04')
+            day: '2-digit',    // Two-digit day (e.g., '29')
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false // 24-hour time format, set true for 12-hour format
+        });
+    }
+
+    //console.log("Fetching EventSessions");
+    {% fetchxml EventSessions %}
+        <fetch top="50">
+            <entity name="msevtmgt_session">
+            <attribute name="icd_detaileddescriptionfr" />
+            <attribute name="msevtmgt_detaileddescription" />
+            <attribute name="msevtmgt_endtime" />
+            <attribute name="msevtmgt_event" />
+            <attribute name="msevtmgt_name" />
+            <attribute name="msevtmgt_starttime" />
+            <attribute name="icd_sessiontitlefr" />
+            <filter>
+                <condition attribute="msevtmgt_sessiontype" operator="eq" value="{{AppEventsessiontype }}" />
+                <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000003" />
+                <condition attribute="msevtmgt_endtime" operator="lt" value="{{eventEndDateAcademicYr }}" />
+                <condition attribute="msevtmgt_starttime" operator="gt" value="{{currentDatePlus15 }}" />
+                   
+            </filter>
+            </entity>
+        </fetch>
+    {% endfetchxml %}
+
+   // console.log("eventEndDateAcademicYr ","{{eventEndDateAcademicYr}}");
+    //console.log("eventStartDate ","{{eventStartDate}}");
+
+    {% for EventSession in EventSessions.results.entities %}
+        var EligiblesessionData = {
+            eventSessionID: "{{ EventSession.msevtmgt_sessionid }}",  // 'msevtmgt_event' is a lookup
+            {% if language == "fr-Fr" %}
+              sessionDescription: `{{ EventSession.icd_detaileddescriptionfr | escape }}`,
+              sessionName: `{{ EventSession.icd_sessiontitlefr | escape }}`,
+            {% else %}
+              sessionDescription: `{{ EventSession.msevtmgt_detaileddescription | escape }}`,
+              sessionName: `{{ EventSession.msevtmgt_name | escape }}`,
+            {% endif %}
+            sessionStartDate:  convertDateFormat("{{ EventSession.msevtmgt_starttime }}"),
+            sessionEndDate: convertDateFormat("{{ EventSession.msevtmgt_endtime }}"),
+            sessionEventName: "{{EventSession.msevtmgt_event.name}}"
+        };
+        EligibleEventSession.push(EligiblesessionData);
+        
+    {% endfor %}
+
+    //console.log("Eligible EventSession", EligibleEventSession);
+
+    {% fetchxml purchasedEventSessions %}
+        <fetch top="50">
+            <entity name="msevtmgt_sessionregistration">
+            <attribute name="msevtmgt_sessionid" />
+            <filter>
+                <condition attribute="msevtmgt_contactid" operator="eq" value="{{appContact.id }}" />
+                <condition attribute="statuscode" operator="eq" value="1" />
+            </filter>
+            </entity>
+        </fetch>
+    {% endfetchxml %}
+    {% for purchasedsession in purchasedEventSessions.results.entities %}
+        var purchasedEventData = {
+            eventSessionID:"{{ purchasedsession.msevtmgt_sessionid.id }}"
+            
+        };
+        purchasedEventSession.push(purchasedEventData);
+    {% endfor %}
+    //console.log("purchasedEventSession ",purchasedEventSession); 
+    
+
+    // Filter out sessions where the start date is not between the academic year start and end
+    var finalEligibleSession = EligibleEventSession.filter(function(eligible) {
+        // Parse the session start date to a Date object
+        var sessionStartDate = new Date(eligible.sessionStartDate);
+    
+        // Get the academic year for the event start date
+        //console.log("event Start Date:", "{{eventStartDate}}");
+        var academicYear = getAcademicYearForEvent("{{eventStartDate}}");
+  
+    
+        // Parse the academic year start and end dates to Date objects
+        var academicYearStartDate = new Date(academicYear.start);        
+        
+        var academicYearEndDate = new Date(academicYear.end); 
+        
+        //Bug 4182
+        // Add 15 Days Buffer
+        var todayPlus15 = new Date();
+        todayPlus15.setDate(todayPlus15.getDate() + 15);
+    
+        // Check if the session start date is within the academic year range
+        var isInAcademicYearRange = sessionStartDate >= academicYearStartDate && sessionStartDate <= academicYearEndDate;
+
+        var isFutureDateAndNotWithin15Days = sessionStartDate > todayPlus15;
+    
+        // Return the session if it is within the academic year range and not already purchased
+        return isInAcademicYearRange && isFutureDateAndNotWithin15Days && !purchasedEventSession.some(function(purchased) {
+            return eligible.eventSessionID === purchased.eventSessionID;
+        });
+    });
+
+    //console.log("finalEligibleSession",finalEligibleSession);
+
+
+    function extractTimeZone(text) {
+        if (text) {
+            const match = text.match(/\((.*?)\)/);
+            return match ? match[1] : null;
+        }
+        return null; // Return null if the text is null or undefined
+    }
+
+    
+
+
+     $(window).on('load', function () {
+    // Hide the parent <tr> of the element with the id 'icd_sessionselection'
+        $('#icd_requestedmodule').closest('tr').hide();
+        $('#icd_sessiontype').closest('tr').hide();
+        $('[data-name="ModuleSelection"]').css('max-height', '50vh').css('overflow-y', 'auto');
+
+        const $tableBody = $("[data-name='ModuleSelection'] tbody");
+
+        const extracted = extractTimeZone("{{ eventTimeZone }}");
+        const language = "{{ language }}";
+    
+        // Define button text based on language
+        const Select = language === "fr-Fr" ? "Choisissez" : "Select";
+        const Selected = language === "fr-Fr" ? "Choisi" : "Selected";
+
+        
+        let filteredSessions = finalEligibleSession;
+    
+        // Filter sessions by MembershipType
+        //filteredSessions = filteredSessions.filter(session => session.MembershipType == "" || session.MembershipType.includes({{appContactmemberhsip}}));
+        ////console.log(filteredSessions);
+    
+        filteredSessions.forEach(function(session) {
+            $tableBody.append(`                  
+                <tr data-session-id="${session.eventSessionID}"> 
+                    <td colspan="2">
+                        <div class="card mb-3">
+                            <div class="card-body d-flex align-items-center">
+                                <!-- Left Side: Button -->
+                                <button type="button" style="width: 120px;" class="btn btn-primary add-session me-3"
+                                    data-session-id="${session.eventSessionID}">${Select}</button>
+                                
+                                <!-- Right Side: Text Content -->
+                                <div class="flex-grow-1">
+                                    <a href="javascript:void(0);" class="card-title mb-0 fs-6 text-decoration-none">
+                                        ${session.sessionName} - ${session.sessionEventName}
+                                     </a>
+                                    <i class="fas fa-info-circle ms-2" data-bs-toggle="tooltip" data-bs-placement="top"
+                                        title="${session.sessionDescription}" style="cursor: pointer;">
+                                    </i>
+                                    <p class="card-text mt-1 fs-6">
+                                        <strong>Date:</strong> ${formatDateByBrowserLocale(session.sessionStartDate)} - ${formatDateByBrowserLocale(session.sessionEndDate)}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `);
+        });
+        
+    
+            
+    
+    
+        // Enable tooltips
+        $('[data-bs-toggle="tooltip"]').tooltip();
+    
+        // Initialize Bootstrap 5 tooltips
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+        const preselectedValue = $('#icd_requestedmodule').val();
+        if (preselectedValue) {
+            $('.add-session').each(function () {
+                const $btn = $(this);
+                $btn.removeClass('btn-secondary').addClass('btn-primary').html('Select');
+                if ($btn.data('session-id') == preselectedValue) {
+                    $btn.removeClass('btn-primary').addClass('btn-secondary').html(Selected);
+                }
+            });
+        }
+    
+        // Handle checkbox state change and populate #icd_sessionselection 
+        $(document).on('click', '.add-session', function () {
+
+
+            var $this = $(this);
+            
+            var selectedSessionId = $this.data('session-id');
+        
+            // Set dropdown value
+            $('#icd_requestedmodule').val(selectedSessionId).trigger('change');
+        
+            // Reset all buttons
+            $('.add-session')
+                .removeClass('btn-secondary')
+                .addClass('btn-primary')
+                .each(function () {
+                    $(this).html('Select');
+                });
+        
+            // Update clicked button
+            $this
+                .removeClass('btn-primary')
+                .addClass('btn-secondary')
+                .html(`${Selected}`);
+        });
+     
+    }) 
+</script>

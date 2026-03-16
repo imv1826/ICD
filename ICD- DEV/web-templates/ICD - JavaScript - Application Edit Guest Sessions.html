@@ -1,0 +1,580 @@
+{% include 'ICD - Modal'%}
+{% assign AppID = application.id | default: "" %}
+{% assign eventId = application.icd_registrationfor.id | default: "" %}
+{% assign event = entities['msevtmgt_event'][eventId] %}
+{% assign eventTimeZone = event.msevtmgt_eventtimezonename | default: 0 %}
+{% assign language = "en-US" %}
+{% if request.path contains "fr-Fr" %}
+    {% assign language = "fr-Fr" %}
+{% endif %}
+{% assign currentContactRec = entities['contact'][user.id] %}
+<script>
+   
+    function convertToEnglishAmount(amount) {
+        // Convert amount to a float first
+        let numericAmount = parseFloat(amount);
+    
+        if (isNaN(numericAmount)) {
+            return "Invalid amount"; // Handle invalid cases
+        }
+    
+        // Format the number in English format (thousands separators and dot for decimals)
+        return numericAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    }
+    
+    // Define an array to store the data
+    var conferenceData = [];
+    var conferenceSessionSelection = [];
+    var purchasedConferenceSession = [];
+    
+
+    function extractDate(datetimeString) {
+    
+        let dateToParse = datetimeString;
+
+        // If French, swap dd and mm to make it MM/dd/yyyy
+        if ("{{language}}" === "fr-Fr") {
+            // Split date and time
+            const [datePart, timePart] = datetimeString.split(' ');
+            if (datePart) {
+                const parts = datePart.split('/'); // dd/MM/yyyy
+                if (parts.length === 3) {
+                    // Swap dd and MM → MM/dd/yyyy
+                    dateToParse = `${parts[1]}/${parts[0]}/${parts[2]}`;
+                    if (timePart) {
+                        dateToParse += ` ${timePart}`; // append time back
+                    }
+                }
+            }
+        }
+        
+
+        const dateObj = new Date(dateToParse);
+        if (isNaN(dateObj)) {
+            console.log("extracted date ",datetimeString)
+            return "Invalid Date";
+        }
+        const month = dateObj.getMonth() + 1; // Months are zero-based
+        const day = dateObj.getDate();
+        const year = dateObj.getFullYear();
+        
+        return `${month}/${day}/${year}`;
+    }
+
+
+        function extractDateTime(datetimeString) {
+        {% if language == "fr-Fr" %}
+            let dateToParse = datetimeString;
+
+            // Split date and time
+            const [datePart, timePart] = datetimeString.split(' - ');
+            if (datePart) {
+                const parts = datePart.split('/'); // dd/MM/yyyy
+                if (parts.length === 3) {
+                    // Swap dd and MM → MM/dd/yyyy
+                    dateToParse = `${parts[0]}/${parts[1]}/${parts[2]}`;
+                    if (timePart) {
+                        dateToParse += ` ${timePart}`; // append time back
+                    }
+                }
+            }
+        
+            
+            return dateToParse;
+        {% else %}
+             return datetimeString;
+        {% endif %}
+    }
+
+
+    //console.log("Fetching session Addon");
+    {% fetchxml ConferenceSelections %}
+        <fetch top="50">
+            <entity name="msevtmgt_session">
+                <attribute name="icd_conference" />
+                <attribute name="icd_product" />
+                <attribute name="msevtmgt_detaileddescription" />
+                <attribute name="msevtmgt_name" />
+                <attribute name="msevtmgt_sessioncode" />
+                <attribute name="msevtmgt_sessiontype" />
+                <attribute name="msevtmgt_endtime" />
+                <attribute name="msevtmgt_starttime" />
+                <attribute name="msevtmgt_sessionid" />
+                <attribute name="icd_audiencetype" />
+                <attribute name="icd_complimentary" />
+                <attribute name="icd_conferenceregistration" />
+                <attribute name="msevtmgt_sessionmaxcapacity" />
+                <attribute name="msevtmgt_registrationcount" />
+                    
+                <filter>
+                    <condition attribute="msevtmgt_event" operator="eq" value="{{eventId}}" />
+
+                    <condition attribute="statuscode" operator="eq" value="1" />
+                    <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000003" />
+                </filter>
+            </entity>
+        </fetch>
+    {% endfetchxml %}
+
+    {% for ConferenceSelection in ConferenceSelections.results.entities %}
+        //console.log("For Each conference");
+        {% fetchxml ConferenceSelectionPrices %}
+            <fetch top="50">
+                <entity name="productpricelevel">
+                    <attribute name="amount" />
+                    <attribute name="discounttypeid" />
+                    <attribute name="icd_earlyprice" />
+                    <attribute name="icd_expirydate" />
+                    <attribute name="icd_lateprice" />
+                    <attribute name="icd_pricelistid" />
+                    <attribute name="icd_regularprice" />
+                    <attribute name="pricelevelid" />
+                    <attribute name="productid" />
+                    <attribute name="roundingoptionamount" />
+                    <attribute name="productpricelevelid" />
+                    <filter>
+                        <condition attribute="productid" operator="eq" value="{{ConferenceSelection.icd_product.id}}" />
+                    </filter>
+                    <link-entity name="pricelevel" from="pricelevelid" to="pricelevelid" link-type="inner" alias="pricelevel">
+                        <attribute name="icd_type" />
+                        <filter>
+                            <condition attribute="statuscode" operator="eq" value="100001" />
+                                <condition attribute="icd_type" operator="contain-values">
+                                    <value>{{currentContactRec.icd_membershipstatus.Value}}</value>
+                                </condition>
+
+                        </filter>
+                    </link-entity>
+                </entity>
+            </fetch>
+        {% endfetchxml %}
+        {% for ConferenceSelectionPrice in ConferenceSelectionPrices.results.entities %}
+            //console.log("for each price");
+
+            {% assign icd_type_values = ConferenceSelectionPrice['pricelevel.icd_type'] %}                
+            var wDate = extractDate("{{ ConferenceSelection.msevtmgt_starttime }}");
+            var conferenceSelectionData = {
+                sessionId: "{{ConferenceSelection.msevtmgt_sessionid}}",
+                title: "{{ConferenceSelection.msevtmgt_name}}",
+                description: "{{ConferenceSelection.msevtmgt_detaileddescription}}",
+                price: parseFloat({{ ConferenceSelectionPrice.amount }}).toFixed(2),
+                date :  wDate,
+                time: extractDateTime("{{ConferenceSelection.msevtmgt_starttime }}") +" - " + extractDateTime("{{ConferenceSelection.msevtmgt_endtime}}"),
+                timeStr: "{{ConferenceSelection.msevtmgt_starttime | date: "hh:mm tt"}} - {{ConferenceSelection.msevtmgt_endtime | date: "hh:mm tt"}}",
+                MembershipType:  "{% for option in icd_type_values %}{{ option.Value }}{% unless forloop.last %},{% endunless %}{% endfor %}",
+                audienceType: "{{ConferenceSelection.icd_audiencetype.value}}",
+                remainingCapacity: parseInt("{{ConferenceSelection.msevtmgt_sessionmaxcapacity}}") - parseInt("{{ConferenceSelection.msevtmgt_registrationcount}}"), // Remaining capacity
+                conferenceregistrationRequired: "{{ConferenceSelection.icd_conferenceregistration}}" ,
+                complimentary: "{{ConferenceSelection.icd_complimentary}}" // Boolean value for Complimentary
+            };
+
+            conferenceSessionSelection.push(conferenceSelectionData);
+        {% endfor %}
+    {% endfor %}
+
+    console.log(" 1 conferenceSessionSelection is",conferenceSessionSelection);
+    //fetch all event session without a product ID
+      console.log("Fetching session Addon");
+    {% fetchxml ConferenceSelectionsWP %}
+    <fetch top="50">
+        <entity name="msevtmgt_session">
+            <attribute name="icd_conference" />
+            <attribute name="icd_product" />
+            <attribute name="msevtmgt_detaileddescription" />
+            <attribute name="msevtmgt_name" />
+            <attribute name="msevtmgt_sessioncode" />
+            <attribute name="msevtmgt_sessiontype" />
+            <attribute name="msevtmgt_endtime" />
+            <attribute name="msevtmgt_starttime" />
+            <attribute name="msevtmgt_sessionid" />
+            <attribute name="icd_audiencetype" />
+            <attribute name="icd_complimentary" />
+            <attribute name="icd_conferenceregistration" />
+            <attribute name="msevtmgt_sessionmaxcapacity" />
+            <attribute name="msevtmgt_registrationcount" />
+            <attribute name="icd_sessiontitlefr" />
+            <attribute name="icd_detaileddescriptionfr" />
+                
+            <filter>
+                <condition attribute="msevtmgt_event" operator="eq" value="{{eventId}}" />
+                    <condition attribute="icd_product" operator="null" value="" />
+                <condition attribute="statuscode" operator="eq" value="1" />
+                <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000003" />
+            </filter>
+        </entity>
+    </fetch>
+    {% endfetchxml %}
+    {% for ConferenceSelectionWP in ConferenceSelectionsWP.results.entities %}
+        var wDate = extractDate("{{ ConferenceSelectionWP.msevtmgt_starttime }}");
+            var conferenceSelectionData = {
+            sessionId: "{{ConferenceSelectionWP.msevtmgt_sessionid}}",
+            title: "{{ConferenceSelectionWP.msevtmgt_name}}",
+            description: "{{ConferenceSelectionWP.msevtmgt_detaileddescription}}",
+            price: 0.00,
+            date :  wDate,
+            time: extractDateTime("{{ConferenceSelectionWP.msevtmgt_starttime}}") + " - " + extractDateTime( "{{ConferenceSelectionWP.msevtmgt_endtime}}"),
+            timeStr: "{{ConferenceSelectionWP.msevtmgt_starttime | date: "hh:mm tt"}} - {{ConferenceSelectionWP.msevtmgt_endtime | date: "hh:mm tt"}}",
+            MembershipType:  "",
+            audienceType: "{{ConferenceSelectionWP.icd_audiencetype.value}}",
+            remainingCapacity: parseInt("{{ConferenceSelectionWP.msevtmgt_sessionmaxcapacity}}") - parseInt("{{ConferenceSelectionWP.msevtmgt_registrationcount}}"), // Remaining capacity
+            conferenceregistrationRequired: "{{ConferenceSelectionWP.icd_conferenceregistration}}" ,
+            complimentary: "{{ConferenceSelectionWP.icd_complimentary}}", // Boolean value for Complimentary
+            RegistrationCount: parseInt("{{ConferenceSelectionWP.msevtmgt_registrationcount}}"),
+            SessionMaxCapacity: parseInt("{{ConferenceSelectionWP.msevtmgt_sessionmaxcapacity}}"),
+            SessionCode: "{{ConferenceSelectionWP.msevtmgt_sessioncode}}",
+            SessionTitleFr: "{{ConferenceSelectionWP.icd_sessiontitlefr}}",
+            SessionDescriptionFr: "{{ConferenceSelectionWP.icd_detaileddescriptionfr}}"
+        };
+        conferenceSessionSelection.push(conferenceSelectionData);
+    {% endfor %}
+    console.log(conferenceSessionSelection);
+    {% fetchxml purchasedConferenceSessions %}
+        <fetch top="50">
+            <entity name="msevtmgt_sessionregistration">
+                <attribute name="msevtmgt_sessionid" />
+                <filter>
+                <condition attribute="msevtmgt_event" operator="eq" value="{{eventId}}" />
+                <condition attribute="msevtmgt_contactid" operator="eq" value="{{user.id }}" />
+                <condition attribute="statecode" operator="eq" value="0" />
+                </filter>
+            </entity>
+        </fetch>
+    {% endfetchxml %}
+    {% for purchasedConferenceSession in purchasedConferenceSessions.results.entities %}
+        purchasedConferenceSession.push("{{ purchasedConferenceSession.msevtmgt_sessionid.id }}");
+    {% endfor %}
+    console.log("purchasedConferenceSession",purchasedConferenceSession);
+    function extractTimeZone(text) {
+        if (text) {
+            const match = text.match(/\((.*?)\)/);
+            return match ? match[1] : null;
+        }
+        return null; // Return null if the text is null or undefined
+    }
+
+
+    $(window).on('load', function () {
+    // Hide the parent <tr> of the element with the id 'icd_sessionselection'
+        $('#icd_sessionselection').closest('tr').hide();
+        $('[data-name="sessionSelectionSection"]').css('max-height', '50vh').css('overflow-y', 'auto');
+
+
+    
+        var emailValue = $('#icd_email').val();
+        const $tableBody = $("[data-name='sessionSelectionSection'] tbody");
+    
+        // Retrieve session and contact data
+        const AddonSessionGlobal = conferenceSessionSelection;
+        //const contactData = JSON.parse(sessionStorage.getItem("contactData") || '[]');
+        const extracted = extractTimeZone("{{ eventTimeZone }}");
+        const simultaneousSessionErrorMsg = "{{ snippets['Application/Conference/simultaneousSessionError'] }}";
+        const language = "{{ language }}";
+    
+        // Define button text based on language
+        const addText = language === "fr-Fr" ? "Ajouter" : "Add";
+            const PriceTranslation = language === "fr-Fr" ? "Prix" : "Price";
+        const TimeTranslation = language === "fr-Fr" ? "Heure" : "Time";
+        const removeText = language === "fr-Fr" ? "Supprimer" : "Remove";
+        const purchasedText = language === "fr-Fr" ? "Acheté" : "Purchased";
+            const varHalifaxStr = language === "fr-Fr" ? "Heure Halifax" : "Halifax Time";
+    
+        // Filter contact data by emailValue
+
+    
+        //console.log("Filtered Contact Data:", contact);
+    
+        // Check if there's a value in #icd_conferencetype
+        const conferenceType = {{application.icd_conferencetype.value}};
+        // Initially, include all sessions
+        let filteredSessions = [...AddonSessionGlobal];
+    
+        console.log("All Sessions:", filteredSessions);
+    
+ 
+    
+        // Filter sessions based on conferenceType if conferenceType = gala filter where conferenceRegistrationRequired = false
+        if (conferenceType === "100000001") {
+            console.log("Conference Type is gala");
+            filteredSessions = filteredSessions.filter(session => session.conferenceregistrationRequired === "false");
+            console.log(filteredSessions);
+        }
+    
+        // Filter sessions by MembershipType
+        filteredSessions = filteredSessions.filter(session => session.MembershipType == "" || session.MembershipType.includes({{currentContactRec.icd_membershipstatus.value}}));
+        console.log(filteredSessions);
+
+            // Check the membership status and log accordingly - audience type/////////////////////////////
+            const membershipStatus = {{currentContactRec.icd_membershipstatus.value}};
+            if ([100000001, 100000003, 100000006, 100000007, 100000008].includes(membershipStatus)) {
+                //console.log("ICD.D member");
+            } else if ([100000002, 100000005, 100000007].includes(membershipStatus)) {
+                // Filter sessions where audienceType is either Memberes and Everyone
+                //console.log("Member");
+                filteredSessions = filteredSessions.filter(session => session.audienceType === "100000003" || session.audienceType === "100000000");
+            } else {
+                // Filter sessions where audienceType = 100000003
+                //console.log("Non-Member");
+                filteredSessions = filteredSessions.filter(session => session.audienceType === "100000003");
+            }
+        console.log(filteredSessions);
+    
+        // Add start time and end time to each session object
+        filteredSessions = filteredSessions.map(session => {
+            const sessionTime = session.time || "";
+            const [startTimeStr, endTimeStr] = sessionTime.split(" - ");
+    
+            const startTime = new Date(startTimeStr);
+            const endTime = new Date(endTimeStr);
+    
+            return {
+                ...session,
+                startTime: startTime,
+                endTime: endTime
+            };
+        })
+        // Sort sessions by start time (assuming session.startTime is a valid date string or timestamp)
+       filteredSessions.sort((a, b) => {
+    const dateA = new Date(a.time.split(' - ')[0]);
+    const dateB = new Date(b.time.split(' - ')[0]);
+
+    console.log("Comparing sessions:");
+    console.log("A:", a.time, "SessionCode:", a.SessionCode);
+    console.log("B:", b.time, "SessionCode:", b.SessionCode);
+    console.log("Parsed dates:", dateA, dateB);
+
+    //  Sort by start time
+    if (dateA.getTime() !== dateB.getTime()) {
+        console.log("Sorting by start time:", dateA - dateB);
+        return dateA - dateB; // Ascending order
+    }
+
+    //  If start times are the same, sort by SessionCode (number)
+    const codeA = a.SessionCode !== null ? Number(a.SessionCode) : Infinity;
+    const codeB = b.SessionCode !== null ? Number(b.SessionCode) : Infinity;
+
+    console.log("Start times equal. Sorting by SessionCode:", codeA - codeB);
+
+    return codeA - codeB; // Ascending order
+});
+    
+    
+    
+        // Append filtered sessions to the table
+        //$tableBody.empty(); // Clear existing rows before appending
+    
+    
+    
+    
+    
+        const groupedSessions = {};
+    
+        // Group sessions by date
+        filteredSessions.forEach(session => {
+            if (!groupedSessions[session.date]) {
+                groupedSessions[session.date] = [];
+            }
+            groupedSessions[session.date].push(session);
+        });
+    
+    
+        // Populate the table
+        Object.keys(groupedSessions).forEach(date => {
+            const dateObj = new Date(date);
+    
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            const longDate = dateObj.toLocaleDateString(language, options);
+            $tableBody.append(`
+                <tr class="bg-primary text-white">
+                    <td colspan="2" class="text-center fw-bold" style="background-color: #cce5ff; color: #004085; padding: 10px;">
+                        ${longDate}
+                    </td>
+                </tr>
+            `);
+    
+            groupedSessions[date].forEach(session => {
+                const price = session.complimentary === "true" ? 0 : session.price;
+
+                // Language check
+            const isFrench = language === "fr-Fr";
+
+            // Localized title & description
+            const sessionTitle = isFrench && session.SessionTitleFr
+            ? session.SessionTitleFr
+            : session.title;
+
+            const sessionDescription = isFrench && session.SessionDescriptionFr
+            ? session.SessionDescriptionFr
+            : session.description;
+
+             // Determine if the session is full
+             const isFull = parseInt(session.RegistrationCount) >= parseInt(session.SessionMaxCapacity);
+             console.log(session.RegistrationCount);
+
+             // Decide what to display in the left column
+             let buttonHTML;
+             if (isFull) {
+             // Show "Full" button styled the same as Add button but disabled
+            buttonHTML = `<button type="button" class="btn btn-primary me-3" 
+            style="width: 130px !important;min-width: 130px !important; cursor: not-allowed;" disabled>{{ snippets['Application/ConferenceSelection/SoldOut'] }}</button>`;
+             } else {
+                // Otherwise, show normal Add/Remove button
+                buttonHTML = `<button type="button" style="width: 130px !important;min-width: 130px !important;" class="btn btn-primary add-session me-3"
+                data-session-id="${session.sessionId}">${addText}</button>`;
+            }
+
+                $tableBody.append(`
+                    <tr data-session-id="${session.sessionId}">
+                        <td colspan="2">
+                            <div class="card mb-3">
+                                <div class="card-body d-flex align-items-center">
+
+                                    <!-- Left Side: Button -->
+                                    ${buttonHTML}
+                                    
+                                    <!-- Right Side: Text Content -->
+                                    <div class="flex-grow-1">
+                                        <a href="javascript:void(0);" class="card-title mb-0 fs-6 text-decoration-none">
+                                            ${sessionTitle}
+                                        </a>
+                                       <!--   <i class="fas fa-info-circle ms-2" data-bs-toggle="tooltip" data-bs-placement="top"
+                                        title="session.description" style="cursor: pointer;">
+                                    </i> -->
+                                    <p class="card-text mt-1 fs-6"><strong>${sessionDescription}</strong></p>
+                                        <p class="card-text mt-1 fs-6"><strong>${TimeTranslation}:</strong>${removeLeadingZeroFromHoursRange(session.timeStr)}</p>
+                                        <p class="card-text fs-6"><strong>${PriceTranslation}:</strong> $${price}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+    
+                `);
+    
+            });
+        });
+    
+        //remove leading zeros from time
+        function removeLeadingZeroFromHoursRange(range) {
+            const [start, end] = range.split(" - ");
+
+            const [sh, sm] = start.split(":");
+            const [eh, em] = end.split(":");
+
+            const startHour = parseInt(sh, 10);  // removes leading zero
+            const endHour = parseInt(eh, 10);    // removes leading zero
+
+            return `${startHour}:${sm} - ${endHour}:${em}`;
+        }
+
+        // Enable tooltips
+        $('[data-bs-toggle="tooltip"]').tooltip();
+    
+        // Initialize Bootstrap 5 tooltips
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+    
+    
+        // Handle checkbox state change and populate #icd_sessionselection 
+        $(document).on('click', '.add-session', function () {
+
+            
+            const selectedSessions = new Set($('#icd_sessionselection').val() ? JSON.parse($('#icd_sessionselection').val()) : []);
+            let allSelectedSessionsDetail = new Set();
+    
+            const button = $(this);
+            const selectedSessionId = button.data("session-id");
+            
+            const SelectedSessionsDetail = filteredSessions.find(s => s.sessionId == selectedSessionId);
+    
+            if (!SelectedSessionsDetail) return;
+    
+            const SelectedSessionsstartTime = SelectedSessionsDetail.startTime ? new Date(SelectedSessionsDetail.startTime) : null;
+            const SelectedSessionsEndTime = SelectedSessionsDetail.endTime ? new Date(SelectedSessionsDetail.endTime) : null;
+    
+            if (selectedSessions.has(selectedSessionId)) {
+                // Remove session if already selected (toggle behavior)
+                selectedSessions.delete(selectedSessionId);
+                button.text(addText).removeClass("btn-secondary").addClass("btn-primary");
+            } else {
+                
+                // Rebuild allSelectedSessionsDetail from selectedSessions
+                allSelectedSessionsDetail = new Set(Array.from(selectedSessions).map(sessionId => {
+                    const sessionDetail = filteredSessions.find(s => s.sessionId == sessionId);
+                    return sessionDetail
+                        ? JSON.stringify({ sessionId, startTime: new Date(sessionDetail.startTime), endTime: new Date(sessionDetail.endTime) })
+                        : null;
+                }).filter(s => s !== null)); // Remove null entries
+    
+                //console.log("All Selected Sessions Detail:", allSelectedSessionsDetail);
+                allSelectedSessionsDetail.add(JSON.stringify({ sessionId: selectedSessionId, startTime: SelectedSessionsstartTime, endTime: SelectedSessionsEndTime }));
+                //console.log("All Selected Sessions Detail:", allSelectedSessionsDetail);
+    
+                const filteredSessions2 = Array.from(allSelectedSessionsDetail).filter(session => {
+                    const parsedSession = JSON.parse(session);
+                    const sessionStartTime = new Date(parsedSession.startTime);
+                    const sessionEndTime = new Date(parsedSession.endTime);
+                    //console.log(`Start: ${sessionStartTime.toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}, End: ${sessionEndTime.toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}`);
+    
+    
+    
+    
+                    return (
+                        (sessionStartTime >= SelectedSessionsstartTime && sessionStartTime <= SelectedSessionsEndTime) ||
+                        (sessionEndTime >= SelectedSessionsstartTime && sessionEndTime <= SelectedSessionsEndTime)
+                    );
+                });
+                //console.log("Filtered Sessions:", filteredSessions2);
+    
+                if (filteredSessions2.length > 1) {
+                    // Show error message if a conflicting session is selected
+                    const row = button.closest('tr');
+                    row.find('.btn-secondary').remove();
+    
+                    // Append error message
+                    const errorMessage = $(`<small class="text-danger" style="display:block;">${simultaneousSessionErrorMsg}</small>`);
+                    row.find('td .card-body .card-text').last().after(errorMessage);
+    
+                    // Async function to remove error message after 3 seconds
+                    (async () => {
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        errorMessage.fadeOut(300, function () { $(this).remove(); });
+                    })();
+                } else {
+                    selectedSessions.add(selectedSessionId);
+                    button.text(removeText).removeClass("btn-primary").addClass("btn-secondary");
+                }
+    
+            }
+    
+            $('#icd_sessionselection').val(JSON.stringify([...selectedSessions]));
+        });
+    
+    
+    
+    
+        // Pre-check checkboxes if #icd_sessionselection has stored data
+        const selectedSessions = JSON.parse($('#icd_sessionselection').val() || '[]');
+    
+        selectedSessions.forEach(sessionId => {
+    
+            const button = $(`[data-session-id="${sessionId}"].add-session`);
+            //console.log("sessionId checking is ",sessionId);
+    
+            if (button.length) {
+                const sessionId = button.data("session-id"); // Get the session ID from the button
+                if (purchasedConferenceSession.includes(sessionId)) {
+                    // If the session is in purchasedConferenceSession
+                    button.text(purchasedText)
+                        .removeClass("btn-primary")
+                        .addClass("btn-secondary")
+                        .prop("disabled", true)
+                        .css("padding", "0");
+                } else {
+                    // If the session is not in purchasedConferenceSession but is in selected session
+                    
+                    button.text(removeText).removeClass("btn-primary").addClass("btn-secondary");
+                }
+            }
+        });
+    })
+</script>

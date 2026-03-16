@@ -1,0 +1,290 @@
+{% assign invoiceID = request.params['id'] %}
+{% fetchxml activeInvoices cache:"false" %}
+<fetch >
+    <entity name="invoice">
+        <attribute name="icd_application" />
+        <attribute name="statecode" />
+        <attribute name="invoiceid" />
+        <filter>
+            <condition attribute="invoiceid" operator="eq" value="{{ invoiceID }}" />
+        </filter>
+  </entity>
+</fetch>
+{% endfetchxml %}
+
+{% assign invResults = activeInvoices.results %}
+
+{% assign statecode = invResults.entities[0].statecode.value %}
+
+{% assign appID = invResults.entities[0].icd_application.id | default: ""  %}
+
+
+{% block main %}
+{% include 'ICD Helper - WebAPI Wrapper AJAX' %}
+
+
+<script type="text/javascript" src="https://services.postcodeanywhere.co.uk/js/address-3.91.js" defer></script>
+<script>
+    {% include "AddressComplete" line1: "billto_line1" line2: "billto_line2" city: "billto_city" province: "billto_stateorprovince" postalcode: "billto_postalcode" country: "billto_country" LimitCountry: "CAN,AFG, ALB, DZA, AND, AGO, ATG, ARG, ARM, AUS, AUT, AZE, BHS, BHR, BGD, BRB, BLR, BEL, BLZ, BEN, BTN, BOL, BIH, BWA, BRA, BRN, BGR, BFA, BDI, CPV, KHM, CMR, CAF, TCD, CHL, CHN, COL, COM, COG, COD, CRI, HRV, CUB, CYP, CZE, DNK, DJI, DMA, DOM, ECU, EGY, SLV, GNQ, ERI, EST, SWZ, ETH, FJI, FIN, FRA, GAB, GMB, GEO, DEU, GHA, GRC, GRD, GTM, GIN, GNB, GUY, HTI, HND, HUN, ISL, IND, IDN, IRN, IRQ, IRL, ISR, ITA, JAM, JPN, JOR, KAZ, KEN, KIR, KWT, KGZ, LAO, LVA, LBN, LSO, LBR, LBY, LIE, LTU, LUX, MDG, MWI, MYS, MDV, MLI, MLT, MHL, MRT, MUS, MEX, FSM, MDA, MCO, MNG, MNE, MAR, MOZ, MMR,NAM, NRU, NPL, NLD, NZL, NIC, NER, NGA, PRK, MKD, NOR, OMN, PAK, PLW, PAN, PNG, PRY, PER, PHL, POL, PRT, QAT, ROU, RUS, RWA, KNA, LCA, VCT, WSM, SMR, STP, SAU, SEN, SRB, SYC, SLE, SGP, SVK, SVN, SLB, SOM, ZAF, KOR, SSD, ESP, LKA, SDN, SUR, SWE, CHE, SYR, TWN, TJK, TZA, THA, TLS, TGO, TON, TTO, TUN, TUR, TKM, TUV, UGA, UKR, ARE, GBR, USA, URY, UZB, VUT, VAT, VEN, VNM, YEM, ZMB, ZWE" %}
+    $(window).on('load', function () {
+      $('#icd_billtoacc').closest('td').hide();
+    var divOrgCheckbox = `
+        <input type="text" name="companyInfoCompleteSearch" id="companyInfoCompleteSearch"
+            class="text form-control" placeholder="{{ snippets["Application/AccountLookup/Typing"] }}"
+            autocomplete="pca-override" aria-label="companyInfoCompleteSearch">
+        <div class="help-block">
+            <div>
+                <label style="font-weight: normal;">
+                    <input onclick="" type="checkbox" id="override_icdOrganisationName">
+                    {{ snippets["Application/AccountLookup/Checkbox"] }}
+                </label>
+            </div>
+        </div>`;
+
+    // Find the parent td of the input with id "icd_name" and append the new HTML
+    var parentTd = $('#billto_name').closest('td');
+    parentTd.append(divOrgCheckbox);
+
+    $('#override_icdOrganisationName').on('change', function () {
+        if ($(this).is(':checked')) {
+            // If the checkbox is checked, hide icd_name and show companyInfoCompleteSearch
+            // If the checkbox is unchecked, hide companyInfoCompleteSearch and show icd_name
+            $('#companyInfoCompleteSearch').hide();
+            $('#billto_name').show();
+
+        } else {
+            $('#billto_name').hide();
+            $('#companyInfoCompleteSearch').show();
+        }
+    });
+
+    // Trigger change event on page load to apply the initial state
+    $('#override_icdOrganisationName').trigger('change');
+
+    // Autopopulate account field  -------------------------------------------->
+    $("#companyInfoCompleteSearch").autocomplete({
+        source: function (request, response) {
+            if (request.term.length >= 3) {
+                $.ajax({
+                    url: "/_api/accounts?$select=name,accountid",
+                    type: "GET",
+                    data: {
+                        $filter: "contains(name,'" + request.term + "')",
+                        $top: 5
+                    },
+                    success: function (data) {
+                        var results = $.map(data.value, function (account) {
+                            return {
+                                label: account.name,  // Displayed va lue in the suggestion list
+                                value: account.name,  // Value returned on selection
+                                accountData: account  // Store the entire account object for later use
+                            };
+                        });
+                        response(results);
+                    },
+                    error: function () {
+                        console.error("Error fetching accounts from API");
+                    }
+                });
+            }
+        },
+        minLength: 3,
+        select: function (event, ui) {
+            // Access the selected account's data
+            var selectedAccount = ui.item.accountData;
+
+            // Autopopulate fields with the selected account's data
+            $("#icd_billtoacc").val(selectedAccount.accountid);
+            $("#billto_name").val(selectedAccount.name);
+        }
+    });
+    var companyValue = $('#billto_name').val();
+    if (companyValue !== "") {
+        $('#companyInfoCompleteSearch').val(companyValue); // Copy the value to the companyInfoCompleteSearch field
+    };
+    // Clear the #icd_billtoacc dropdown when #icd_name changes
+    $('#billto_name').on('change input', function () {
+        $('#icd_billtoacc').val(''); // Clear the value of the dropdown
+    });
+
+    //End Autopopulate account field -------------------------------------------->
+    });
+</script>
+
+<div class="row sectionBlockLayout text-start" style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+    <div class="container" style="display: flex; flex-wrap: wrap; flex-direction: column;">
+        <div class="col-lg-12" style="padding: 16px;">
+            {% entityform name: 'Invoice Form (invoice line)' %}
+        </div>
+
+{% if statecode == 0 %}
+    <!-- Error Message -->
+    <div id="paypal-error-alert" class="alert alert-danger" role="alert" style="display:none; font-size: 16px;"></div>
+
+  <!-- Pay Now Button Container -->
+  <div class="pay-now-container">
+    <button class="pay-now-btn btn btn-primary">Pay Now</button>
+  </div>
+ {% endif %}
+
+  <div class="paypal-modal modal" style="display: none;">
+    <div class="modal-content">
+      <span class="close-modal">&times;</span>
+      <div id="spinnerOverlay" style="display: none;">
+        <div id="processingSpinner">
+          <div class="spinner"></div>
+          <div class="spinner-text">Processing your transaction...</div>
+        </div>
+      </div>
+      {{ snippets["PayPal Payments"] }}
+    </div>
+  </div>
+
+</div>
+</div>
+
+<style>
+.pay-now-container {
+    display: flex;
+    justify-content: flex-end; /* Aligns button to the right */
+    width: 100%;
+    padding-right: 16px; /* Matches form padding */
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+.pay-now-btn {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.pay-now-btn:hover {
+    background-color: #0056b3; /* Darker shade on hover */
+}
+/* Modal Background (Blur Effect) */
+.paypal-modal {
+    display: none;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(8px); /* Adds the blur effect to the background */
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black overlay */
+    display: flex; /* Flexbox for centering */
+    align-items: center; /* Center vertically */
+    justify-content: center; /* Center horizontally */
+    z-index: 1000; /* Ensure it appears above other content */
+}
+
+/* Modal Content */
+.modal-content {
+    position: relative; /* Ensure proper positioning */
+    background-color: white;
+    padding: 20px;
+    border-radius: 10px; /* Rounded corners */
+    box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2); /* Subtle shadow */
+    max-width: 400px; /* Maximum width of modal */
+    width: 90%; /* Responsive width */
+    text-align: center;
+    z-index: 1100;
+    transform: translate(-50%, -25%); /* Center the modal */
+    top: 50%; /* Vertically centered */
+    left: 50%; /* Horizontally centered */
+    position: absolute; /* Use absolute positioning within the fixed parent */
+}
+
+span.close-modal {
+    position: absolute;
+    top: 1px;
+    right: 10px;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.invoice-message {
+    font-size: 14px;
+    margin: 0 auto;
+    font-family: avenir !important;
+    max-width: 800px;
+}
+
+
+/* Full-page overlay */
+#spinnerOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999; /* Ensures it appears above other elements */
+}
+
+/* Spinner container */
+#processingSpinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* The spinner animation */
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #ffffff; /* White border */
+    border-top: 5px solid transparent; /* Transparent top for spinning effect */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Spinner text styling (if needed) */
+.spinner-text {
+    color: #ffffff;
+    font-size: 16px;
+    margin-top: 10px;
+}
+</style>
+
+<script>
+
+    $(document).ready(function() {
+        $('.pay-now-btn').on('click', function(e) {
+            e.preventDefault();
+            $('.paypal-modal').fadeIn(); // Smooth appearance
+        });
+
+        // Optional: Close modal when clicking outside or pressing Esc
+        $(document).on('click', function(e) {
+            if ($(e.target).closest('.modal-content, .pay-now-btn').length === 0) {
+                $('.paypal-modal').fadeOut();
+            }
+        });
+
+        $(document).on('keydown', function(e) {
+            if (e.key === "Escape") {
+                $('.paypal-modal').fadeOut();
+            }
+        });
+
+        // Close modal on clicking close button
+        $('.close-modal').on('click', function() {
+            $('.paypal-modal').fadeOut();
+        });
+
+        // Close modal when clicking outside or pressing Esc
+        $(document).on('click', function(e) {
+            if ($(e.target).closest('.modal-content, .pay-now-btn').length === 0) {
+                $('.paypal-modal').fadeOut();
+            }
+        });
+    });
+</script>
+  
+{% endblock %}

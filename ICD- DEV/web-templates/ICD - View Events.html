@@ -1,0 +1,153 @@
+{%assign entity_event="msevtmgt_event"%}
+{%assign event=entities[entity_event][request.params.eventid]%}
+
+<div class="event-details-container">
+
+        <h1>{{event.msevtmgt_name}}</h1>
+        
+ 
+        <div class="event-description">
+                <label>Description:</label>
+                <p>{{event.msevtmgt_description}}</p>
+            </div>
+
+        
+        <div class="event-details-info">
+            <div class="event-detail">
+                <label>Event Type:</label>
+                <p>{{event.msevtmgt_eventtype.label}}</p>
+            </div>
+            <div class="event-detail">
+                <label>Start Date & Time:</label>
+                <p>{{event.msevtmgt_eventstartdate}}</p>
+            </div>
+            <div class="event-detail">
+                <label>End Date & Time:</label>
+                <p>{{event.msevtmgt_eventenddate}}</p>
+            </div>
+            <div class="event-detail">
+                <label>City:</label>
+                <p>{{event.icd_city}}</p>
+            </div>
+            <div class="event-detail">
+                <label>Registration:</label>
+                <p>{{event.icd_registrationstatus.label}}</p>
+            </div>
+            
+        </div>
+
+        
+        
+        {% fetchxml registeredEvent %}
+            <fetch>
+  <entity name="icd_eventapplication">
+    <link-entity name="msevtmgt_eventregistration" from="icd_eventapplication" to="icd_eventapplicationid">
+      <filter>
+        <condition attribute="msevtmgt_contactid" operator="eq" value="{{user.id}}" />
+      </filter>
+    </link-entity>
+    <link-entity name="msevtmgt_event" from="msevtmgt_eventid" to="icd_event">
+      <filter>
+        <condition attribute="msevtmgt_eventid" operator="eq" value="{{request.params.eventid}}" />
+      </filter>
+    </link-entity>
+  </entity>
+</fetch>
+        {% endfetchxml %}
+        
+
+        {% if registeredEvent.results.entities.size > 0 %}
+
+<div style="font-size: 20px; color: red; font-weight: bold;">
+            Thank you! You have already registered for this event.
+        </div>
+
+        {% else %}
+            {% assign mysite = sitemarkers['Individual Event Registration Form'].url | add_query: 'eventid', request.params.eventid  %}
+          
+            <div>
+                <a href="{{mysite}}" style="display: inline-block; padding: 10px 20px; color: white; background-color: #002b54; text-decoration: none; border-radius: 5px;">Register here</a>
+            </div>
+        {% endif %}
+
+    </div>
+    
+
+<style>
+    .event-details-container {
+        margin: 20px auto;
+        max-width: 800px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: flex-start; 
+    }
+
+    .event-description {
+        flex: 1;
+        margin-right: 20px;
+    }
+
+    .event-details-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column; 
+    }
+
+    .event-detail {
+        margin-bottom: 20px;
+    }
+
+    .event-details-info .event-detail label {
+        font-weight: bold;
+    }
+
+    .event-details-info .event-detail p {
+        margin: 0;
+    }
+
+    .webform {
+        margin-top: auto; 
+    }
+</style>
+
+
+   
+
+
+{%comment%}
+{%include 'FetchXML - Retrieve Active Events'%}
+<h1>{{ActiveEvents.results.entities.size}}</h1>
+<div class="container-fluid">
+    <section class="grid" style="display: grid;  padding: 10px;  grid-template-columns: auto auto; grid-column-gap: 50px;">
+        {%for event in ActiveEvents.results.entities%}
+            <div class="event-card" style="display: grid;  padding: 10px; grid-template-columns: auto;">
+                <div class="event-name">{{event.msevtmgt_name}}</div>
+                <div class="publish-status">{{event.msevtmgt_publishstatus.label}}</div>
+            </div>
+        {%endfor%}
+    </section>
+</div>
+
+<style>
+    .event-card {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .event-name {
+        font-size: 24px;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 10px;
+    }
+
+    .publish-status {
+        font-size: 16px;
+        color: #666;
+    }
+</style>
+{%endcomment%}

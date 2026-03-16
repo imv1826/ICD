@@ -1,0 +1,1286 @@
+{% assign EventRegId = request.params['id' ] | default: "" %}
+{% include 'ICD - CSS'%}
+{% include 'ICD - Modal'%}
+{% include 'ICD Helper - WebAPI Wrapper AJAX' %}
+{% assign EventRegistration = entities['msevtmgt_eventregistration'][request.params.id]%}
+{% assign eventRegStatus = EventRegistration.statecode.value %}
+{% assign eventRegStatusReason = EventRegistration.statuscode.value %}
+{% assign Event = entities['msevtmgt_event'][EventRegistration.msevtmgt_eventid.id]%}
+{% assign applicationid = EventRegistration.icd_application.id %}
+{% assign eventId = Event.msevtmgt_eventid %}
+{% assign eventRecordType = Event.icd_recordsubtype.value %}
+{% assign EventstartDate = Event['msevtmgt_eventstartdate'] | date: "MM-dd-yyyy HH:mm"%}
+{% assign CurrentDateTime = now | date: "MM-dd-yyyy HH:mm" %}
+{% assign cancelFlow = "33b3c76c-9ef0-f011-8406-7ced8d05de79" %}
+{% assign flowType = 1 %}
+
+<script>
+// Parse Liquid dates into JS Date objects
+  var eventStartDate = new Date('{{ EventstartDate }}');
+  var currentDateTime = new Date('{{ CurrentDateTime }}');
+
+  console.log('EventstartDate:', eventStartDate);
+  console.log('CurrentDateTime:', currentDateTime);
+
+  $(window).on('load', function () {
+    // Check if the event is in the past
+    if (eventStartDate < currentDateTime) {
+      // Hide specific workflow button
+      $("button.workflow-link[data-workflowid='aebd8342-2491-ef11-8a69-6045bdcd6c74']").hide();
+	}
+  });
+</script>
+
+{%comment %}
+if subtype is conference then fetch the session
+{% endcomment %}
+
+{% if Event.icd_recordsubtype.value == 100000004 %}
+	{% assign cancelFlow = "c176815e-f61a-f011-998a-6045bdf9b61a" %}
+	{% assign flowType = 2 %}
+{% endif %}
+
+{% if  Event.icd_recordsubtype.value == 100000002 %}
+  {% fetchxml sessionRegistrations %}
+    <fetch top="500">
+      <entity name="msevtmgt_sessionregistration">
+        <attribute name="msevtmgt_sessionid" />
+        <filter>
+          <condition attribute="msevtmgt_registrationid" operator="eq" value="{{EventRegId}}" />
+            <condition attribute="statecode" operator="eq" value="0" />
+        </filter>
+      </entity>
+    </fetch>
+  {% endfetchxml %}
+
+  {% assign sessionIds = "" %}
+  {% for session in sessionRegistrations.results.entities %}
+    {% if forloop.first %}
+      {% assign sessionIds = session.msevtmgt_sessionid.id %}
+    {% else %}
+      {% assign sessionIds = sessionIds | append: '","' | append: session.msevtmgt_sessionid.id %}
+    {% endif %}
+  {% endfor %}
+
+  {% assign sessionIds = '["' | append: sessionIds | append: '"]' %}
+  {%comment %}
+    Get all open Edit conference application
+  {% endcomment %}
+  {% fetchxml activeConfApplication %}
+    <fetch top="50">
+      <entity name="icd_application">
+        <attribute name="icd_applicationid" />
+        <filter>
+          <condition attribute="icd_apptype" operator="eq" value="cbd72e80-51f7-ef11-bae2-6045bdf9b61a" />
+          <condition attribute="icd_contact" operator="eq" value="{{user.id}}"  />
+          <condition attribute="icd_registrationfor" operator="eq" value="{{eventId}}" />
+          <condition attribute="statecode" operator="eq" value="0" />
+        </filter>
+      </entity>
+    </fetch>
+  {% endfetchxml %}
+  {% assign applicationCount = activeConfApplication.results.entities | size %}
+
+{% endif %}
+
+{% block main %}
+<!--DEP-->
+{% if  Event.icd_recordsubtype.value == 100000001 %}
+
+  {% fetchxml getModuleStartDate %}
+      <fetch>
+        <entity name="msevtmgt_session">
+          <attribute name="msevtmgt_sessionid" />
+          <attribute name="msevtmgt_name" />
+          <attribute name="msevtmgt_starttime" />
+          <order attribute="msevtmgt_name" descending="false" />
+          <link-entity name="msevtmgt_sessionregistration" from="msevtmgt_sessionid" to="msevtmgt_sessionid" link-type="inner" alias="ab">
+            <filter type="and">
+              <condition attribute="msevtmgt_registrationid" operator="eq" value="{{EventRegId}}" />
+            </filter>
+          </link-entity>
+        </entity>
+      </fetch>
+    {% endfetchxml %}
+
+    {% assign first_record = getModuleStartDate.results.entities[0] %}
+    {% assign module1StartDate = first_record.msevtmgt_starttime %}
+
+  <div class="row sectionBlockLayout text-start"
+    style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+    <div class="container" style="display: flex; flex-wrap: wrap;">
+      <div class="col-lg-12 columnBlockLayout"
+        style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">
+        {% entityform name: 'EventRegistration and Session Registration' %}
+        {% assign currentDatePlus15 = now | date_add_days: 15 | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+      </div>
+    </div>
+  </div>
+ 
+  <script>
+    $(document).ready(function () {
+        
+        console.log("Initializing Custom Button Placement");
+        var status = {{eventRegStatus}};
+        var statusReason = {{eventRegStatusReason}};
+        if(status == 1 && statusReason == 100000001){
+          $(".workflow-link").hide();
+          // Detect language from URL
+          let message = window.location.href.includes("fr-Fr")
+              ? "Merci. Votre demande d'annulation a été soumise à l'IAS. Si votre demande est approuvée, un remboursement sera effectué, déduction faite des frais administratifs applicables."
+              : "Thank you. Your cancellation request has been submitted to the ICD. If your request is approved, a refund will be processed, less any applicable administrative fees.";
+          // Append the modal structure dynamically to the body
+          $("body").append(`
+              <!-- Alert Modal -->
+              <div class="modal fade" id="alertModal" tabindex="-1"  style="z-index:1056 !important"  aria-labelledby="alertModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title" id="alertModalLabel">Message</h5>
+                    </div>
+                    <div class="modal-body">
+                      <span class="text-danger"> ${message}</span>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="Close">{{ snippets['RefundModal/CloseButton'] }}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+          `);
+
+          // Add styles for the Close button
+          $("<style>")
+              .prop("type", "text/css")
+              .html(`
+                  .custom-close-btn {
+                      background-color: #f26649;
+                      color: white;
+                      border: none;
+                      border-radius: 4px;
+                      padding: 5px 10px;
+                      cursor: pointer;
+                  }
+                  .custom-close-btn:hover {
+                      background-color: #d9534f;
+                  }
+              `)
+              .appendTo("head");
+
+          // Show the modal
+          $("#alertModal").modal('show');
+            return;
+            
+        }    
+        var $leftActionContainer = $(".form-action-container-left");
+
+// Create the "View Course" button
+var $viewCourseButton = $("<button>", {
+    type: "button",
+    class: "btn btn-primary",
+    text: "{{ snippets["Course/Registration/ViewCourseButton"] }}",
+    click: function () {
+        window.location.href = "https://{{settings['BrightSpace Host']}}/d2l/home";
+    }
+});
+
+// Append the "View Course" button always
+$leftActionContainer.append($viewCourseButton);
+
+        // var eventDateText = '{{module1StartDate}}';
+        // var currentDatePlus15Text ='{{currentDatePlus15}}';
+        // if (eventDateText) {
+        //       var eventDate = new Date(eventDateText);
+        //       var currentDatePlus15 = new Date(currentDatePlus15Text);
+
+        //       console.log("Event Start Date:", eventDate);
+        //       console.log("Threshold Date (Current +15 days):", currentDatePlus15);
+
+        //       // Condition: Show the Cancel button only if the event date is greater than or equal to the threshold
+        //       if (eventDate >= currentDatePlus15) {
+        //           console.log("Event is at least 15 days away. Showing 'Cancel' button.");
+        //           $(".workflow-link").show(); // Show the Cancel button
+        //       } else {
+        //           console.log("Event is within 15 days. Hiding 'Cancel' button.");
+        //           $(".workflow-link").hide(); // Hide the Cancel button
+        //       }
+        //   } else {
+        //       console.log("Event start date not found.");
+        //   }
+    });
+</script>
+<!--National Conference-->
+{% elseif Event.icd_recordsubtype.value == 100000002 %}
+
+  <div class="row sectionBlockLayout text-start"
+    style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+    <div class="container" style="display: flex; flex-wrap: wrap;">
+      <div class="col-lg-12 columnBlockLayout"
+        style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">
+        <button id="editSessionBtn" onclick="editSession()" type="button" class="btn button1 mb-2" style="margin-left: auto;">{{ snippets['Conference/UpcomingEvent/EditSessionsBtn'] }}</button>
+        {% entityform name: 'Event Reg - Conference Event Registration (Guest)' %}
+      </div>
+    </div>
+  </div>
+  <!-- Short Courses-->
+  {% elseif Event.icd_recordsubtype.value == 100000000 or Event.icd_recordsubtype.value == 100000006 %}
+  <div class="row sectionBlockLayout text-start"
+    style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+    <div class="container" style="display: flex; flex-wrap: wrap;">
+      <div class="col-lg-12 columnBlockLayout"
+        style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">
+
+        {% entityform name: 'Course Details' %}
+
+        {% if request.path contains "fr-Fr" %}
+
+          <!-- Assign event dates -->
+          {% assign currentDate = now | date_add_hours: -5  | date: 'g'%}
+          {% assign currentDatePlus2 = now | date_add_days: 2 | date_add_hours: -5 | date: 'g' %}
+          {% assign currentDatePlus15 = now | date_add_days: 15 | date_add_hours: -5 | date: 'g' %}
+          {% assign eventDate = EventstartDate| date: "yyyy-MM-dd HH:mm"  %}
+            
+            <button id = "ShortCourseLess15Days"
+              type="button" 
+              class="btn btn-secondary defer-btn d-none" 
+              style="margin-left: 20px; margin-right: 10px;" 
+              onclick="AlertPopup('{{ snippets['CourseForm/Alert/ShortCourseLess15Days'] }}', 'OK')">
+              Defer
+            </button>
+          
+
+            <button id = "deferButton"
+              onclick="window.location.href='{{ sitemarkers['Application'].url | escape }}?formType=648996bd-2ef9-ef11-bae1-6045bdf9994e&eventId={{eventId}}&recordType={{eventRecordType}}&DeferedAppID={{applicationid}}';"
+              type="button" class="btn btn-secondary defer-btn d-none"
+              style="margin-left: 20px; margin-right: 10px;">{{ snippets["Course/Registration/DeferButton"] }}</button>     
+
+
+              <script>
+                const currentDate = new Date();  // Current date and time
+
+                // Step 2: Set currentDatePlus2 to 2 days after the current date
+                const currentDatePlus2 = new Date(currentDate);
+                currentDatePlus2.setDate(currentDatePlus2.getDate() + 2);  // Add 2 days
+
+                // Step 3: Set currentDatePlus15 to 15 days after the current date
+                const currentDatePlus15 = new Date(currentDate);
+                currentDatePlus15.setDate(currentDatePlus15.getDate() + 15);  // Add 15 days
+
+                const eventDate = "{{ eventDate }}";
+                const eventRegStatus = {{ eventRegStatus | default: 0 }};  // Ensure this is a number
+
+                // Parse strings into Date objects for the event date
+                const jsEventDate = new Date(eventDate);
+                const jsCurrentDate = new Date(currentDate);
+
+                // Log for debugging
+                {% comment %} console.log("currentDate:", currentDate);
+                console.log("currentDatePlus2:", currentDatePlus2);
+                console.log("currentDatePlus15:", currentDatePlus15);
+                console.log("eventDate:", eventDate);
+                console.log("jsEventDate:", jsEventDate);
+                console.log("eventRegStatus:", eventRegStatus); {% endcomment %}
+
+              // Check condition
+              if (jsEventDate > currentDatePlus2 && jsEventDate < currentDatePlus15 && eventRegStatus === 0) {
+                $('#ShortCourseLess15Days').removeClass('d-none');
+                console.log("✅ Condition met: eventDate > currentDatePlus2 and eventDate < currentDatePlus15 and eventRegStatus == 0");
+                // Do something if condition is met
+                document.querySelector('.defer-btn')?.classList.remove('d-none');
+              } else if (jsEventDate >= currentDatePlus15 && eventRegStatus === 0) {
+                $('#deferButton').removeClass('d-none');
+                console.log("✅ Condition met: eventDate >= currentDatePlus15 and eventRegStatus == 0");
+                // Do something if second condition is met
+                document.querySelector('.defer-btn')?.classList.add('d-none');
+              } else {
+                console.log("❌ Conditions not met.");
+              }
+            </script>
+            
+          
+
+        {% else %}
+          <!-- Assign event dates -->
+          {% assign currentDate = now | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+          {% assign currentDatePlus2 = now | date_add_days: 2 | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+          {% assign currentDatePlus15 = now | date_add_days: 15 | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+          {% assign eventDate = EventstartDate | date: "yyyy-MM-dd HH:mm" %}
+          <!-- Conditionally display Defer button in Liquid -->
+          {% if eventDate > currentDatePlus2 and eventDate < currentDatePlus15 and eventRegStatus == 0 %}
+            <button 
+              type="button" 
+              class="btn btn-secondary defer-btn"  
+              style="margin-left: 20px; margin-right: 10px;" 
+              onclick="AlertPopup('{{ snippets['CourseForm/Alert/ShortCourseLess15Days'] }}', 'OK')">
+              Defer
+            </button>
+          {% elsif eventDate >= currentDatePlus15 and eventRegStatus == 0  and eventRegStatus == 0%}
+
+            <button 
+              onclick="window.location.href='{{ sitemarkers['Application'].url | escape }}?formType=648996bd-2ef9-ef11-bae1-6045bdf9994e&eventId={{eventId}}&recordType={{eventRecordType}}&DeferedAppID={{applicationid}}';"
+              type="button" class="btn btn-secondary defer-btn"
+              style="margin-left: 20px; margin-right: 10px;">{{ snippets["Course/Registration/DeferButton"] }}</button>
+
+          {% endif %}
+        {% endif %}
+		
+		{% if  Event.icd_recordsubtype.value == 100000006 %}
+		<script>
+		// Create the "View Course" button
+		var $viewCourseButton = $("<button>", {
+			type: "button",
+			class: "btn btn-primary",
+			text: "{{ snippets["Course/Registration/ViewCourseButton"] }}",
+			click: function () {
+			window.location.href = "https://{{settings['BrightSpace Host']}}/d2l/home";
+			}
+		});
+		</script>
+		{% endif %}
+		
+      </div>
+		<div class="col-12" style="margin-top:10px;margin-bottom:10px;text-align:right;">
+		<button onclick="confirmNationalEvent('{{cancelFlow}}',{{flowType}})" type="button" class="btn btn-secondary ml-1">{{ snippets["CancelText"] }}</button>
+		</div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function () {
+        
+        console.log("Initializing Custom Button Placement");
+        var status = {{eventRegStatus}};
+        var statusReason = {{eventRegStatusReason}};
+        if(status == 1 && statusReason == 2){
+          $(".workflow-link").hide();
+          // Detect language from URL
+          let message = window.location.href.includes("fr-Fr")
+              ? "Merci. Votre demande d'annulation a été soumise à l'IAS. Si votre demande est approuvée, un remboursement sera effectué, déduction faite des frais administratifs applicables."
+              : "Thank you. Your cancellation request has been submitted to the ICD. If your request is approved, a refund will be processed, less any applicable administrative fees.";
+          // Append the modal structure dynamically to the body
+          $("body").append(`
+              <!-- Alert Modal -->
+              <div class="modal fade" id="alertModal" tabindex="-1"  style="z-index:1056 !important"  aria-labelledby="alertModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title" id="alertModalLabel">Message</h5>
+                    </div>
+                    <div class="modal-body">
+                      <span class="text-danger"> ${message}</span>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="Close">{{ snippets['RefundModal/CloseButton'] }}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+          `);
+
+          // Add styles for the Close button
+          $("<style>")
+              .prop("type", "text/css")
+              .html(`
+                  .custom-close-btn {
+                      background-color: #f26649;
+                      color: white;
+                      border: none;
+                      border-radius: 4px;
+                      padding: 5px 10px;
+                      cursor: pointer;
+                  }
+                  .custom-close-btn:hover {
+                      background-color: #d9534f;
+                  }
+              `)
+              .appendTo("head");
+
+          // Show the modal
+          $("#alertModal").modal('show');
+            return;
+        }     
+        // var eventDateText = '{{eventDate}}';
+        // var currentDatePlus15Text ='{{currentDatePlus15}}';
+        // if (eventDateText) {
+        //       var eventDate = new Date(eventDateText);
+        //       var currentDatePlus15 = new Date(currentDatePlus15Text);
+
+        //       console.log("Event Start Date:", eventDate);
+        //       console.log("Threshold Date (Current +15 days):", currentDatePlus15);
+
+        //       // Condition: Show the Cancel button only if the event date is greater than or equal to the threshold
+        //       if (eventDate >= currentDatePlus15) {
+        //           console.log("Event is at least 15 days away. Showing 'Cancel' button.");
+        //           $(".deactivate-link").show(); // Show the Cancel button
+        //       } else {
+        //           console.log("Event is within 15 days. Hiding 'Cancel' button.");
+        //           $(".deactivate-link").hide(); // Hide the Cancel button
+        //       }
+        //   } else {
+        //       console.log("Event start date not found.");
+        //   }
+
+
+
+        // Target the left action container before the Cancel button
+        var $leftActionContainer = $(".form-action-container-left");
+
+        // Create the "View Course" button
+        var $viewCourseButton = $("<button>", {
+            type: "button",
+            class: "btn btn-primary",
+            text: "{{ snippets["Course/Registration/ViewCourseButton"] }}",
+            click: function () {
+                window.location.href = "https://{{settings['BrightSpace Host']}}/d2l/home";
+            }
+        });
+
+        // Append the "View Course" button always
+        $leftActionContainer.append($viewCourseButton);
+        // **Check if the Defer button exists and move it to the left action container**
+        var $existingDeferButton = $("button").filter(function() {
+    return $(this).text().includes("Defer") || $(this).text().includes("Reporter");
+}).detach();
+        console.log("Existing Defer Button Found:", $existingDeferButton.length > 0);
+
+        if ($existingDeferButton.length > 0) {
+            $leftActionContainer.append($existingDeferButton);
+            console.log("Moved Defer Button inside .form-action-container-left.");
+        } else {
+            console.log("No existing 'Defer' button found.");
+        }
+    });
+</script>
+<!-- BDP-->
+  {% elseif Event.icd_recordsubtype.value == 100000005 %}
+  
+  <div class="row sectionBlockLayout text-start"
+    style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+    <div class="container" style="display: flex; flex-wrap: wrap;">
+      <div class="col-lg-12 columnBlockLayout"
+        style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">
+        {% entityform name: 'Course Details' %}
+
+
+
+
+        {% if request.path contains "fr-Fr" %}
+
+          <!-- Assign event dates -->
+          {% assign currentDate = now | date_add_hours: -5  | date: 'g'%}
+          {% assign currentDatePlus2 = now | date_add_days: 2 | date_add_hours: -5 | date: 'g' %}
+          {% assign currentDatePlus15 = now | date_add_days: 15 | date_add_hours: -5 | date: 'g' %}
+          {% assign eventDate = EventstartDate| date: "yyyy-MM-dd HH:mm"  %}
+          
+
+          <button  id = "ShortCourseLess15Days"
+            onclick="window.location.href='{{ sitemarkers['Application'].url | escape }}?formType=ac2e77b0-2ef9-ef11-bae1-6045bdf9994e&eventId={{eventId}}&recordType={{eventRecordType}}&DeferedAppID={{applicationid}}';"
+            type="button" class="btn btn-secondary defer-btn"
+            style="margin-left: 20px; margin-right: 10px;">{{ snippets["Course/Registration/DeferButton"] }}</button>    
+
+
+              <script>
+                const currentDate = new Date();  // Current date and time
+
+                // Step 2: Set currentDatePlus2 to 2 days after the current date
+                const currentDatePlus2 = new Date(currentDate);
+                currentDatePlus2.setDate(currentDatePlus2.getDate() + 2);  // Add 2 days
+
+                // Step 3: Set currentDatePlus15 to 15 days after the current date
+                const currentDatePlus15 = new Date(currentDate);
+                currentDatePlus15.setDate(currentDatePlus15.getDate() + 15);  // Add 15 days
+
+                const eventDate = "{{ eventDate }}";
+                const eventRegStatus = {{ eventRegStatus | default: 0 }};  // Ensure this is a number
+
+                // Parse strings into Date objects for the event date
+                const jsEventDate = new Date(eventDate);
+                const jsCurrentDate = new Date(currentDate);
+
+                // Log for debugging
+                {% comment %} console.log("currentDate:", currentDate);
+                console.log("currentDatePlus2:", currentDatePlus2);
+                console.log("currentDatePlus15:", currentDatePlus15);
+                console.log("eventDate:", eventDate);
+                console.log("jsEventDate:", jsEventDate);
+                console.log("eventRegStatus:", eventRegStatus); {% endcomment %}
+
+              // Check condition
+              if (jsEventDate > currentDatePlus2  && eventRegStatus === 0) {
+                $('#ShortCourseLess15Days').removeClass('d-none');
+                //console.log("✅ Condition met: eventDate > currentDatePlus2 and eventDate < currentDatePlus15 and eventRegStatus == 0");
+                // Do something if condition is met
+                document.querySelector('.defer-btn')?.classList.remove('d-none');
+              }
+            </script>
+            
+
+        {% else %}
+          <!-- Assign event dates -->
+          {% assign currentDate = now | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+          {% assign currentDatePlus2 = now | date_add_days: 2 | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+          {% assign currentDatePlus15 = now | date_add_days: 15 | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+          {% assign eventDate = EventstartDate | date: "yyyy-MM-dd HH:mm" %}
+          <!-- Conditionally display Defer button in Liquid -->
+          {% if eventDate >= currentDatePlus2 and eventRegStatus == 0 %}
+            <button 
+              onclick="window.location.href='{{ sitemarkers['Application'].url | escape }}?formType=ac2e77b0-2ef9-ef11-bae1-6045bdf9994e&eventId={{eventId}}&recordType={{eventRecordType}}&DeferedAppID={{applicationid}}';"
+              type="button" class="btn btn-secondary defer-btn"
+              style="margin-left: 20px; margin-right: 10px;">{{ snippets["Course/Registration/DeferButton"] }}</button>
+          {% endif %}
+        {% endif %}
+      </div>
+	  	<div class="col-12" style="margin-top:10px;margin-bottom:10px;text-align:right;">
+		<button onclick="confirmNationalEvent('{{cancelFlow}}',{{flowType}})" type="button" class="btn btn-secondary ml-1">{{ snippets["CancelText"] }}</button>
+	</div>
+    </div>
+  </div>
+  <script>
+
+      $(document).ready(function () {
+              console.log("Initializing Custom Button Placement");
+              var status = {{eventRegStatus}};
+              var statusReason = {{eventRegStatusReason}};
+              if(status == 1 && statusReason == 2){
+                $(".workflow-link").hide();
+                // Detect language from URL
+                let message = window.location.href.includes("fr-Fr")
+                    ? "Merci. Votre demande d'annulation a été soumise à l'IAS. Si votre demande est approuvée, un remboursement sera effectué, déduction faite des frais administratifs applicables."
+                    : "Thank you. Your cancellation request has been submitted to the ICD. If your request is approved, a refund will be processed, less any applicable administrative fees.";
+                // Append the modal structure dynamically to the body
+                $("body").append(`
+                    <!-- Alert Modal -->
+                    <div class="modal fade" id="alertModal" tabindex="-1"  style="z-index:1056 !important"  aria-labelledby="alertModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+                      <div class="modal-dialog">
+                        <div class="modal-content">
+                          <div class="modal-header">
+                            <h5 class="modal-title" id="alertModalLabel">Message</h5>
+                          </div>
+                          <div class="modal-body">
+                            <span class="text-danger"> ${message}</span>
+                          </div>
+                          <div class="modal-footer">
+                            <button type="button" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="Close">{{ snippets['RefundModal/CloseButton'] }}</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                `);
+
+              // Add styles for the Close button
+              $("<style>")
+                  .prop("type", "text/css")
+                  .html(`
+                      .custom-close-btn {
+                          background-color: #f26649;
+                          color: white;
+                          border: none;
+                          border-radius: 4px;
+                          padding: 5px 10px;
+                          cursor: pointer;
+                      }
+                      .custom-close-btn:hover {
+                          background-color: #d9534f;
+                      }
+                  `)
+                  .appendTo("head");
+
+              // Show the modal
+              $("#alertModal").modal('show');
+                return;
+              }
+
+              // var eventDateText = '{{eventDate}}';
+              // var currentDatePlus15Text ='{{currentDatePlus15}}';
+              // if (eventDateText) {
+              //       var eventDate = new Date(eventDateText);
+              //       var currentDatePlus15 = new Date(currentDatePlus15Text);
+
+              //       console.log("Event Start Date:", eventDate);
+              //       console.log("Threshold Date (Current +15 days):", currentDatePlus15);
+
+              //       // Condition: Show the Cancel button only if the event date is greater than or equal to the threshold
+              //       if (eventDate >= currentDatePlus15) {
+              //           console.log("Event is at least 15 days away. Showing 'Cancel' button.");
+              //           $(".deactivate-link").show(); // Show the Cancel button
+              //       } else {
+              //           console.log("Event is within 15 days. Hiding 'Cancel' button.");
+              //           $(".deactivate-link").hide(); // Hide the Cancel button
+              //       }
+              //   } else {
+              //       console.log("Event start date not found.");
+              //   }
+              // Target the left action container before the Cancel button
+              var $leftActionContainer = $(".form-action-container-left");
+
+              // **Check if the Defer button exists and move it to the left action container**
+              var $existingDeferButton = $("button").filter(function() {
+    return $(this).text().includes("Defer") || $(this).text().includes("Reporter");
+}).detach();
+              console.log("Existing Defer Button Found:", $existingDeferButton.length > 0);
+
+              if ($existingDeferButton.length > 0) {
+                  $leftActionContainer.append($existingDeferButton);
+                  console.log("Moved Defer Button inside .form-action-container-left.");
+              } else {
+                  console.log("No existing 'Defer' button found.");
+              }
+      });
+
+  </script>
+  <!-- GEP-->
+  {% elseif Event.icd_recordsubtype.value == 100000007 %}
+  
+  <div class="row sectionBlockLayout text-start"
+    style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+    <div class="container" style="display: flex; flex-wrap: wrap;">
+      <div class="col-lg-12 columnBlockLayout"
+        style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">
+        {% entityform name: 'Course Details' %}
+
+
+        {% if request.path contains "fr-Fr" %}
+
+          <!-- Assign event dates -->
+          {% assign currentDate = now | date_add_hours: -5  | date: 'g'%}
+          {% assign currentDatePlus2 = now | date_add_days: 2 | date_add_hours: -5 | date: 'g' %}
+          {% assign currentDatePlus15 = now | date_add_days: 15 | date_add_hours: -5 | date: 'g' %}
+          {% assign eventDate = EventstartDate| date: "yyyy-MM-dd HH:mm"  %}
+          
+
+          <button id= "ShortCourseLess15Days"
+            onclick="window.location.href='{{ sitemarkers['Application'].url | escape }}?formType=ffc258aa-2ef9-ef11-bae1-6045bdf9994e&eventId={{eventId}}&recordType={{eventRecordType}}&DeferedAppID={{applicationid}}';"
+            type="button" class="btn btn-secondary defer-btn"
+            style="margin-left: 20px; margin-right: 10px;">{{ snippets["Course/Registration/DeferButton"] }}</button>   
+
+
+              <script>
+                const currentDate = new Date();  // Current date and time
+
+                // Step 2: Set currentDatePlus2 to 2 days after the current date
+                const currentDatePlus2 = new Date(currentDate);
+                currentDatePlus2.setDate(currentDatePlus2.getDate() + 2);  // Add 2 days
+
+                // Step 3: Set currentDatePlus15 to 15 days after the current date
+                const currentDatePlus15 = new Date(currentDate);
+                currentDatePlus15.setDate(currentDatePlus15.getDate() + 15);  // Add 15 days
+
+                const eventDate = "{{ eventDate }}";
+                const eventRegStatus = {{ eventRegStatus | default: 0 }};  // Ensure this is a number
+
+                // Parse strings into Date objects for the event date
+                const jsEventDate = new Date(eventDate);
+                const jsCurrentDate = new Date(currentDate);
+
+                // Log for debugging
+                {% comment %} console.log("currentDate:", currentDate);
+                console.log("currentDatePlus2:", currentDatePlus2);
+                console.log("currentDatePlus15:", currentDatePlus15);
+                console.log("eventDate:", eventDate);
+                console.log("jsEventDate:", jsEventDate);
+                console.log("eventRegStatus:", eventRegStatus); {% endcomment %}
+
+              // Check condition
+              if (jsEventDate > currentDatePlus2  && eventRegStatus === 0) {
+                $('#ShortCourseLess15Days').removeClass('d-none');
+                //console.log("✅ Condition met: eventDate > currentDatePlus2 and eventDate < currentDatePlus15 and eventRegStatus == 0");
+                // Do something if condition is met
+                document.querySelector('.defer-btn')?.classList.remove('d-none');
+              }
+            </script>
+            
+
+        {% else %}
+          <!-- Assign event dates -->
+          {% assign currentDate = now | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+          {% assign currentDatePlus2 = now | date_add_days: 2 | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+          {% assign currentDatePlus15 = now | date_add_days: 15 | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+          {% assign eventDate = EventstartDate | date: "yyyy-MM-dd HH:mm" %}
+          <!-- Conditionally display Defer button in Liquid -->
+          {% if eventDate >= currentDatePlus2 and eventRegStatus == 0 %}
+            <button id= "ShortCourseLess15Days"
+              onclick="window.location.href='{{ sitemarkers['Application'].url | escape }}?formType=ffc258aa-2ef9-ef11-bae1-6045bdf9994e&eventId={{eventId}}&recordType={{eventRecordType}}&DeferedAppID={{applicationid}}';"
+              type="button" class="btn btn-secondary defer-btn"
+              style="margin-left: 20px; margin-right: 10px;">{{ snippets["Course/Registration/DeferButton"] }}</button>
+          {% endif %}
+        {% endif %}
+        
+
+      </div>
+	  	<div class="col-12" style="margin-top:10px;margin-bottom:10px;text-align:right;">
+		<button onclick="confirmNationalEvent('{{cancelFlow}}',{{flowType}})" type="button" class="btn btn-secondary ml-1">{{ snippets["CancelText"] }}</button>
+	</div>
+    </div>
+  </div>
+
+  <script>
+
+  $(document).ready(function () {
+        console.log("Initializing Custom Button Placement");
+        var status = {{eventRegStatus}};
+        var statusReason = {{eventRegStatusReason}};
+        if(status == 1 && statusReason == 2){
+          $(".workflow-link").hide();
+          // Detect language from URL
+          let message = window.location.href.includes("fr-Fr")
+              ? "Merci. Votre demande d'annulation a été soumise à l'IAS. Si votre demande est approuvée, un remboursement sera effectué, déduction faite des frais administratifs applicables."
+              : "Thank you. Your cancellation request has been submitted to the ICD. If your request is approved, a refund will be processed, less any applicable administrative fees.";
+          // Append the modal structure dynamically to the body
+          $("body").append(`
+              <!-- Alert Modal -->
+              <div class="modal fade" id="alertModal" tabindex="-1"  style="z-index:1056 !important"  aria-labelledby="alertModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title" id="alertModalLabel">Message</h5>
+                    </div>
+                    <div class="modal-body">
+                      <span class="text-danger"> ${message}</span>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="Close">{{ snippets['RefundModal/CloseButton'] }}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+          `);
+
+          // Add styles for the Close button
+          $("<style>")
+              .prop("type", "text/css")
+              .html(`
+                  .custom-close-btn {
+                      background-color: #f26649;
+                      color: white;
+                      border: none;
+                      border-radius: 4px;
+                      padding: 5px 10px;
+                      cursor: pointer;
+                  }
+                  .custom-close-btn:hover {
+                      background-color: #d9534f;
+                  }
+              `)
+              .appendTo("head");
+
+          // Show the modal
+          $("#alertModal").modal('show');
+            return;
+        }    
+        // var eventDateText = '{{eventDate}}';
+        //       var currentDatePlus15Text ='{{currentDatePlus15}}';
+        //       if (eventDateText) {
+        //             var eventDate = new Date(eventDateText);
+        //             var currentDatePlus15 = new Date(currentDatePlus15Text);
+
+        //             console.log("Event Start Date:", eventDate);
+        //             console.log("Threshold Date (Current +15 days):", currentDatePlus15);
+
+        //             // Condition: Show the Cancel button only if the event date is greater than or equal to the threshold
+        //             if (eventDate >= currentDatePlus15) {
+        //                 console.log("Event is at least 15 days away. Showing 'Cancel' button.");
+        //                 $(".deactivate-link").show(); // Show the Cancel button
+        //             } else {
+        //                 console.log("Event is within 15 days. Hiding 'Cancel' button.");
+        //                 $(".deactivate-link").hide(); // Hide the Cancel button
+        //             }
+        //         } else {
+        //             console.log("Event start date not found.");
+        //         }
+        // Target the left action container before the Cancel button
+        var $leftActionContainer = $(".form-action-container-left");
+
+        // **Check if the Defer button exists and move it to the left action container**
+        var $existingDeferButton = $("button").filter(function() {
+    return $(this).text().includes("Defer") || $(this).text().includes("Reporter");
+}).detach();
+        console.log("Existing Defer Button Found:", $existingDeferButton.length > 0);
+
+        if ($existingDeferButton.length > 0) {
+            $leftActionContainer.append($existingDeferButton);
+            console.log("Moved Defer Button inside .form-action-container-left.");
+        } else {
+            console.log("No existing 'Defer' button found.");
+        }               
+    });
+
+  </script>
+
+<!--Delivery Menthod : Inperson-->
+{% elseif Event.icd_deliverymethod.value == 100000000 %}
+<div class="row sectionBlockLayout text-start"
+  style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout"
+      style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">
+      {% entityform name: 'Course Details' %}
+
+      {% assign currentDatePlus2 = now | date_add_days: 2 | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+      {% assign eventDate = EventstartDate | date: "yyyy-MM-dd HH:mm" %}
+    </div>
+		<div class="col-12" style="margin-top:10px;margin-bottom:10px;text-align:right;">
+		<button onclick="confirmNationalEvent('{{cancelFlow}}',{{flowType}})" type="button" class="btn btn-secondary ml-1">{{ snippets["CancelText"] }}</button>
+	</div>
+  </div>
+</div>
+<script>
+
+  $(document).ready(function () {
+        console.log("Initializing Custom Button Placement");
+        var status = {{eventRegStatus}};
+        var statusReason = {{eventRegStatusReason}};
+        if(status == 1 && statusReason == 2){
+          $(".workflow-link").hide();
+          // Detect language from URL
+          let message = window.location.href.includes("fr-Fr")
+              ? "Merci. Votre demande d'annulation a été soumise à l'IAS. Si votre demande est approuvée, un remboursement sera effectué, déduction faite des frais administratifs applicables."
+              : "Thank you. Your cancellation request has been submitted to the ICD. If your request is approved, a refund will be processed, less any applicable administrative fees.";
+          // Append the modal structure dynamically to the body
+          $("body").append(`
+              <!-- Alert Modal -->
+              <div class="modal fade" id="alertModal" tabindex="-1"  style="z-index:1056 !important"  aria-labelledby="alertModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title" id="alertModalLabel">Message</h5>
+                    </div>
+                    <div class="modal-body">
+                      <span class="text-danger"> ${message}</span>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="Close">{{ snippets['RefundModal/CloseButton'] }}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+          `);
+
+          // Add styles for the Close button
+          $("<style>")
+              .prop("type", "text/css")
+              .html(`
+                  .custom-close-btn {
+                      background-color: #f26649;
+                      color: white;
+                      border: none;
+                      border-radius: 4px;
+                      padding: 5px 10px;
+                      cursor: pointer;
+                  }
+                  .custom-close-btn:hover {
+                      background-color: #d9534f;
+                  }
+              `)
+              .appendTo("head");
+
+          // Show the modal
+          $("#alertModal").modal('show');
+            return;
+        }    
+        // var eventDateText = '{{eventDate}}';
+        //       var currentDatePlus2Text ='{{currentDatePlus2}}';
+        //       if (eventDateText) {
+        //             var eventDate = new Date(eventDateText);
+        //             var currentDatePlus2 = new Date(currentDatePlus2Text);
+
+        //             console.log("Event Start Date:", eventDate);
+        //             console.log("Threshold Date (Current +15 days):", currentDatePlus2);
+
+        //             // Condition: Show the Cancel button only if the event date is greater than or equal to the threshold
+        //             if (eventDate >= currentDatePlus2) {
+        //                 console.log("Event is at least 15 days away. Showing 'Cancel' button.");
+        //                 $(".deactivate-link").show(); // Show the Cancel button
+        //             } else {
+        //                 console.log("Event is within 15 days. Hiding 'Cancel' button.");
+        //                 $(".deactivate-link").hide(); // Hide the Cancel button
+        //             }
+        //         } else {
+        //             console.log("Event start date not found.");
+        //         }
+        // Target the left action container before the Cancel button
+        var $leftActionContainer = $(".form-action-container-left");
+
+        // **Check if the Defer button exists and move it to the left action container**
+        var $existingDeferButton = $("button:contains('Defer')").detach();
+        console.log("Existing Defer Button Found:", $existingDeferButton.length > 0);
+
+        if ($existingDeferButton.length > 0) {
+            $leftActionContainer.append($existingDeferButton);
+            console.log("Moved Defer Button inside .form-action-container-left.");
+        } else {
+            console.log("No existing 'Defer' button found.");
+        }               
+    });
+
+  </script>
+  <!--Delivery Menthod : Online-->
+{% elseif Event.icd_deliverymethod.value == 100000001 %}
+<div class="row sectionBlockLayout text-start"
+  style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout"
+      style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">
+      {% entityform name: 'Course Details' %}
+
+      {% assign currentDatePlus1 = now | date_add_days: 1 | date_add_hours: -5 | date: "yyyy-MM-dd HH:mm" %}
+      {% assign eventDate = EventstartDate | date: "yyyy-MM-dd HH:mm" %}
+    </div>
+	<div class="col-12" style="margin-top:10px;margin-bottom:10px;text-align:right;">
+		<button onclick="confirmNationalEvent('{{cancelFlow}}',{{flowType}})" type="button" class="btn btn-secondary ml-1">{{ snippets["CancelText"] }}</button>
+	</div>
+  </div>
+</div>
+<script>
+
+  $(document).ready(function () {
+        console.log("Initializing Custom Button Placement");
+        var status = {{eventRegStatus}};
+        var statusReason = {{eventRegStatusReason}};
+        if(status == 1 && statusReason == 2){
+          $(".workflow-link").hide();
+          // Detect language from URL
+          let message = window.location.href.includes("fr-Fr")
+              ? "Merci. Votre demande d'annulation a été soumise à l'IAS. Si votre demande est approuvée, un remboursement sera effectué, déduction faite des frais administratifs applicables."
+              : "Thank you. Your cancellation request has been submitted to the ICD. If your request is approved, a refund will be processed, less any applicable administrative fees.";
+          // Append the modal structure dynamically to the body
+          $("body").append(`
+              <!-- Alert Modal -->
+              <div class="modal fade" id="alertModal" tabindex="-1"  style="z-index:1056 !important"  aria-labelledby="alertModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title" id="alertModalLabel">Message</h5>
+                    </div>
+                    <div class="modal-body">
+                      <span class="text-danger"> ${message}</span>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="Close">{{ snippets['RefundModal/CloseButton'] }}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+          `);
+
+          // Add styles for the Close button
+          $("<style>")
+              .prop("type", "text/css")
+              .html(`
+                  .custom-close-btn {
+                      background-color: #f26649;
+                      color: white;
+                      border: none;
+                      border-radius: 4px;
+                      padding: 5px 10px;
+                      cursor: pointer;
+                  }
+                  .custom-close-btn:hover {
+                      background-color: #d9534f;
+                  }
+              `)
+              .appendTo("head");
+
+          // Show the modal
+          $("#alertModal").modal('show');
+            return;
+        }    
+        // var eventDateText = '{{eventDate}}';
+        //       var currentDatePlus1Text ='{{currentDatePlus1}}';
+        //       if (eventDateText) {
+        //             var eventDate = new Date(eventDateText);
+        //             var currentDatePlus1 = new Date(currentDatePlus1Text);
+
+        //             console.log("Event Start Date:", eventDate);
+        //             console.log("Threshold Date (Current +15 days):", currentDatePlus1);
+
+        //             // Condition: Show the Cancel button only if the event date is greater than or equal to the threshold
+        //             if (eventDate >= currentDatePlus1) {
+        //                 console.log("Event is at least 15 days away. Showing 'Cancel' button.");
+        //                 $(".deactivate-link").show(); // Show the Cancel button
+        //             } else {
+        //                 console.log("Event is within 15 days. Hiding 'Cancel' button.");
+        //                 $(".deactivate-link").hide(); // Hide the Cancel button
+        //             }
+        //         } else {
+        //             console.log("Event start date not found.");
+        //         }
+        // Target the left action container before the Cancel button
+        var $leftActionContainer = $(".form-action-container-left");
+
+        // **Check if the Defer button exists and move it to the left action container**
+        var $existingDeferButton = $("button:contains('Defer')").detach();
+        console.log("Existing Defer Button Found:", $existingDeferButton.length > 0);
+
+        if ($existingDeferButton.length > 0) {
+            $leftActionContainer.append($existingDeferButton);
+            console.log("Moved Defer Button inside .form-action-container-left.");
+        } else {
+            console.log("No existing 'Defer' button found.");
+        }               
+    });
+
+  </script>
+{% else %}
+<div class="row sectionBlockLayout text-start"
+  style="display: flex; flex-wrap: wrap; margin: 0px; min-height: auto; padding: 8px;">
+  <div class="container" style="display: flex; flex-wrap: wrap;">
+    <div class="col-lg-12 columnBlockLayout"
+      style="flex-grow: 1; display: flex; flex-direction: column; min-width: 250px; word-break: break-word; padding: 16px; margin: 60px 0px;">
+      {% entityform name: 'Course Details' %}
+    </div>
+	<div class="col-12" style="margin-top:10px;margin-bottom:10px;text-align:right;">
+		<button onclick="confirmNationalEvent('{{cancelFlow}}',{{flowType}})" type="button" class="btn btn-secondary ml-1">{{ snippets["CancelText"] }}</button>
+	</div>
+  </div>
+</div>
+
+{% endif %}
+
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-labelledby="loadingModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body text-center">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Generating your form, please wait...</p>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="timedAlert" class="mt-2 alert alert-info text-center d-none" role="alert">Generating your form!</div>
+
+<script>
+	function confirmNationalEvent(flowid, type)
+	{
+		let question = window.location.href.includes("fr-Fr")
+		  ? "Souhaitez-vous annuler votre inscription ?"
+		  : "Do you wish to cancel your registration?";
+		  
+		$("body").append(`
+		  <!-- Alert Modal -->
+		  <div class="modal fade" id="confirmModal" tabindex="-1" style="z-index:1056 !important"  aria-labelledby="confirmModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+			<div class="modal-dialog">
+			  <div class="modal-content">
+				<div class="modal-header">
+				  <h5 class="modal-title" id="confirmModalLabel">Confirm</h5>
+				</div>
+				<div class="modal-body">
+				  <span>${question}</span>
+				</div>
+				<div class="modal-footer">
+					<button type="button"  onclick="cancelNationalEvent(\'${flowid}\', ${type})" class="btn custom-yes-btn" data-bs-dismiss="modal" aria-label="Yes">Yes</button>
+					<button type="button"  onclick="closeConfirm()" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="No">No</button>
+				</div>
+			  </div>
+			</div>
+		  </div>
+		`);
+
+		// Add styles for the Close button
+		$("<style>")
+			.prop("type", "text/css")
+			.html(`
+			  .custom-close-btn {
+				  background-color: #f26649;
+				  color: white;
+				  border: none;
+				  border-radius: 4px;
+				  padding: 5px 10px;
+				  cursor: pointer;
+			  }
+			  .custom-close-btn:hover {
+				  background-color: #d9534f;
+			  }
+
+			  .custom-yes-btn {
+				  background-color: #0053a1;
+				  color: white;
+				  border: none;
+				  border-radius: 4px;
+				  padding: 5px 10px;
+				  cursor: pointer;
+			  }
+			  .custom-yes-btn:hover {
+				  background-color: #002142;
+			  }							  
+			`)
+		.appendTo("head");
+			  
+		$("#confirmModal").modal('show');
+	}
+	
+	function cancelNationalEvent(flowid, type)
+	{
+		$("#confirmModal").modal('hide');
+		
+		$('#loadingModal').modal('show');
+		
+		var cancelConfLink = "/_api/cloudflow/v1.0/trigger/" + flowid;
+		
+		var data = {};
+		
+		if(type == 1)
+		{
+			data["EventRegistration"] = "{{EventRegId}}";
+		}
+		else
+		{
+			data["Purchaser"] = "{{user.id}}";
+			data["Event"] = "{{eventID}}";	
+		}
+		
+		var payload = {};
+		payload.eventData = JSON.stringify(data);
+
+		shell
+		.ajaxSafePost({
+			type: "POST",
+			contentType:"application/json",
+			url: cancelConfLink,
+			data: JSON.stringify(payload),
+			processData: false,
+			global:false,
+		})
+		.done(function (response) {
+			console.log(response);
+			$('#loadingModal').modal('hide');
+			// Assuming response is in the format {"response": "some-id"}
+			var responseObject = JSON.parse(response);
+
+			let message = window.location.href.includes("fr-Fr")
+			? "Votre demande d'annulation a été envoyée à l'ICD. Si elle est approuvée, vous recevrez un remboursement de votre paiement, déduction faite des frais administratifs."
+			: "Your cancellation request has been sent to ICD. If your request is approved, you will receive a refund of your payment minus administrative fees.";
+
+			// Append the modal structure dynamically to the body
+			$("body").append(`
+			<!-- Alert Modal -->
+			<div class="modal fade" id="alertModal" tabindex="-1" style="z-index:1056 !important"  aria-labelledby="alertModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+				<div class="modal-dialog">
+					<div class="modal-content">
+						<div class="modal-header">
+							<h5 class="modal-title" id="alertModalLabel">Message</h5>
+						</div>
+						<div class="modal-body">
+							<span class="text-danger"> ${message}</span>
+						</div>
+						<div class="modal-footer">
+							<button type="button"  onclick="window.location.href='{{ snippets["Link/ICD.CA"] }}'" class="btn custom-close-btn" data-bs-dismiss="modal" aria-label="Close">Close</button>
+						</div>
+					</div>
+				</div>
+			</div>
+			`);
+
+			// Add styles for the Close button
+			$("<style>")
+			.prop("type", "text/css")
+			.html(`
+				.custom-close-btn {
+					background-color: #f26649;
+					color: white;
+					border: none;
+					border-radius: 4px;
+					padding: 5px 10px;
+					cursor: pointer;
+				}
+				.custom-close-btn:hover {
+					background-color: #d9534f;
+				}
+			`)
+			.appendTo("head");
+
+			// Show the modal
+			$("#alertModal").modal('show');
+
+			// var id = responseObject.response; // Extract the id
+
+			// // Redirect the user to the desired URL
+			// var originUrl = window.location.origin;
+			// var redirectUrl = originUrl + "/Application-Form/?id=" + id;
+			// window.location.href = redirectUrl;
+		})
+		.fail(function (xhr, status, error) {
+			console.log("Failed:", status, error);
+			console.log("Response:", xhr.responseText);
+		});
+	}
+	
+	function closeConfirm()
+	{
+		$("#confirmModal").modal('hide');
+	}
+
+  function DeactivateApplications(applicationId) {
+    //console.log("Deactivating application: " + applicationId);
+    var updateData = {
+      "statuscode": 100000007, // Assuming '2' is the status for 'Inactive', change accordingly
+      "statecode": 1   // Assuming '1' is the state for 'Inactive', change accordingly
+    };
+    webapi.safeAjax({
+      type: "PATCH",
+      contentType: "application/json",
+      url: "/_api/icd_applications(" + applicationId + ")", // Updating the specific application
+      data: JSON.stringify(updateData),
+      success: function (data, textStatus, xhr) {
+        console.log("Successfully deactivated application ID: " + applicationId);
+      },
+      error: function (xhr, textStatus, errorThrown) {
+        console.error("Error deactivating application ID: " + applicationId, xhr, textStatus, errorThrown);
+      }
+    });
+  }
+
+
+  function editSession() {
+    $("#editSessionBtn").prop("disabled", true);
+    $('#loadingModal').modal('show');
+    {% for app in activeConfApplication.results.entities %}
+      DeactivateApplications("{{ app.icd_applicationid }}");
+    {% endfor %}
+    console.log("tseting record");
+    $('#loadingModal').modal('show');
+    var newApplication = {
+      "icd_AppType@odata.bind": "/icd_applicationtypes(cbd72e80-51f7-ef11-bae2-6045bdf9b61a)",
+      "icd_Contact@odata.bind": "/contacts({{user.id}})",
+      "icd_Registrationfor@odata.bind": "/msevtmgt_events({{EventRegistration.msevtmgt_eventid.id}})",
+      "icd_deliverymethod": {{Event.icd_deliverymethod.value}},
+      "icd_sessionselection":'{{ sessionIds }}' ,
+      {% if EventRegistration.icd_conferencetype.value and EventRegistration.icd_conferencetype.value != "" %}
+        "icd_conferencetype" : {{ EventRegistration.icd_conferencetype.value }},
+      {% endif %}
+      "icd_EventRegistration@odata.bind":"/msevtmgt_eventregistrations({{EventRegistration.id}})",
+      "icd_firstname": "{{ user.firstname }}",
+      "icd_lastname": "{{ user.lastname }}",
+      "icd_email": "{{ user.emailaddress1 }}"
+    };
+
+
+    console.log("creating record");
+    webapi.safeAjax({
+      type: "POST",
+      contentType: "application/json",
+      url: "/_api/icd_applications",
+      data: JSON.stringify(newApplication),
+      success: function (data, textStatus, xhr) {
+        $('#loadingModal').modal('hide');
+        // Upon successful creation, retrieve the ID of the new Multipayment Array
+        var newApplicationID = xhr.getResponseHeader("entityid"); // Assuming entityid is returned in the response header
+        console.log("Created Application Array ID: " + newApplicationID);
+        // Redirect the user
+        window.location.href = "/Application-Form/?id=" + newApplicationID
+      },
+      error: function (xhr, textStatus, errorThrown) {
+        $('#loadingModal').modal('hide');
+        // Display error message
+        console.log("error is " + xhr + "," + textStatus + "," + errorThrown);
+      }
+    }); 
+    $("#editSessionBtn").prop("disabled", false);
+  }
+</script>
+
+
+{% endblock %}

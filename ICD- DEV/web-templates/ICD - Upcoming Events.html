@@ -1,0 +1,306 @@
+{% block main %}
+
+{% assign CourseCode = request.params['CourseCode'] %}
+{% assign todaysDate = now | date: 'yyyy-MM-dd' %}
+
+
+{%fetchxml ActiveEvents%}
+<fetch>
+  <entity name="msevtmgt_event">
+    <attribute name="msevtmgt_name" />
+    <attribute name="msevtmgt_publishstatus" />
+    <filter>
+      <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000001" />
+    </filter>
+  </entity>
+</fetch>
+{%endfetchxml%}
+
+{%fetchxml UpcomingEvents%}
+<fetch>
+  <entity name="msevtmgt_event">
+    <attribute name="msevtmgt_eventid" />
+    <attribute name="msevtmgt_name" />
+    <attribute name="msevtmgt_eventstartdate" />
+    <attribute name="msevtmgt_eventenddate" />
+    <attribute name="msevtmgt_stopwebsiteregistrationson" />
+    <attribute name="icd_deliverymethod" />
+    <attribute name="icd_coursecode" />
+    <attribute name="icd_recordsubtype" />
+    <attribute name="msevtmgt_registrationcount" />
+    <attribute name="msevtmgt_maximumeventcapacity" />
+    <attribute name="msevtmgt_setregistrationsenddate" />
+    <attribute name="icd_waitinglist" />
+    <attribute name="icd_displayscholarship" />
+    <order attribute="msevtmgt_name" descending="false" />
+    <filter type="and">
+      <filter type="or">
+        <filter type="and">
+          <condition attribute="msevtmgt_eventstartdate" operator="next-x-months" value="12" />
+          <condition attribute="icd_recordtype" operator="eq" value="100000000" />
+          <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000003" />
+          <condition attribute="statecode" operator="eq" value="0" />
+        </filter>
+        <filter type="and">
+          <condition attribute="msevtmgt_eventenddate" operator="on-or-after" value="{{todaysDate}}" />
+          <condition attribute="icd_recordtype" operator="eq" value="100000000" />
+          <condition attribute="icd_recordsubtype" operator="eq" value="100000006" />
+          <condition attribute="msevtmgt_publishstatus" operator="eq" value="100000003" />
+          <condition attribute="statecode" operator="eq" value="0" />
+        </filter>
+      </filter>
+    </filter>
+    <link-entity name="msevtmgt_building" from="msevtmgt_buildingid" to="msevtmgt_building" visible="false" link-type="outer" alias="EventBuilding">
+      <attribute name="msevtmgt_stateprovince" />
+      <attribute name="msevtmgt_city" />
+    </link-entity>
+    <link-entity name="icd_coursecode" from="icd_coursecodeid" to="icd_coursecode" link-type="inner" alias="course">
+      <attribute name="icd_description" />
+      <attribute name="icd_descriptionfr" />
+      <attribute name="icd_name" />
+      <filter type="and">
+        <condition attribute="icd_name" operator="eq" value="{{CourseCode}}" />
+      </filter>
+    </link-entity>
+  </entity>
+</fetch>
+{%endfetchxml%}
+
+{% if UpcomingEvents.results.entities.size > 0 %}
+    {% assign languagecode = website.selected_language.code %}
+
+    {% if languagecode == 'fr-Fr'  %} 
+        {% assign CourseDescription = UpcomingEvents.results.entities[0]['course.icd_descriptionfr'] %} 
+    {% else %}   
+        {% assign CourseDescription = UpcomingEvents.results.entities[0]['course.icd_description'] %}   
+    {% endif %}
+
+    {% assign BDPFormType = "852b80b9-7de4-ef11-be21-6045bdf9be70" %}
+    {% assign DEPFormType = "ac48e12d-8ea2-ef11-a72d-7c1e5206390e" %}
+    {% assign ShortCourseFormType = "caeea6d3-827a-ef11-ac20-6045bdf99e57" %}
+    {% assign GEPFormType = "4a1c7f0d-3ff3-ef11-be21-7c1e5206390e" %}
+    {% assign GEPScholarFormType = "cdc1758c-1ff6-ef11-be20-6045bdf9994e" %}
+    {% assign DEPScholarFormType = "de9a1c89-add8-ef11-a731-6045bdf9b61a" %}
+    {% assign formTypeId = "" %}
+    {% assign scholarformTypeId = "" %}
+    {% assign IsEventAvailable = false %}
+    {% assign currentDate = now %}
+    {% assign courseStatus = snippets["UpcomingEvents/CourseStatus"] %}
+    {% assign ButtonLabel = snippets["UpcomingEvents/ApplyButton"]  %}
+
+
+    {% if (CourseCode == 'GEP' or  CourseCode == 'DEP') %} {% assign ShowScholarship = true %} {% else %} {% assign ShowScholarship = false %} {% endif %} 
+
+    <!DOCTYPE html>
+
+    <html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ICD-Rotman GEP Program (GEP)</title>
+        <style> 
+            .containerUpcomingEvents {
+                font-family: avenir !important;
+                color: #333;
+                max-width: 67%;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #fff;
+                margin-top:30px;
+            }
+
+            h2 {
+                font-size: 28px;
+                font-weight: bold;
+            }
+
+            p {
+                font-size: 16px;
+                line-height: 1.5;
+                margin-bottom: 25px;
+            }
+
+            .note {
+                font-weight: bold;
+                text-decoration: underline;
+            }
+            @media screen and (max-width: 768px) {
+                .containerUpcomingEvents {
+                    max-width: 100%;
+                    padding: 10px;
+                    margin: 0 auto;
+                }
+                table, thead, tbody, th, td, tr {
+                    display: block;
+                    width: 100%;
+                }
+
+                thead {
+                    display: none; /* Hide header */
+                }
+
+                td {
+                    position: relative;
+                    padding-left: 50%;
+                    padding-top: 12px;
+                    padding-bottom: 12px;
+                    text-align: left;
+                    border: 1px solid #ddd;
+                    word-wrap: break-word;
+                    white-space: normal;
+                }
+
+                td::before {
+                    content: attr(data-label);
+                    position: absolute;
+                    left: 10px;
+                    top: 8px;
+                    font-weight: bold;
+                    white-space: nowrap;
+                    color: #333;
+                }
+                /* Alternate row colors */
+                tbody tr:nth-of-type(odd) {
+                    background-color: #f8f8f8; /* light grey */
+                }
+
+                tbody tr:nth-of-type(even) {
+                    background-color: #ffffff; /* white */
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="containerUpcomingEvents">
+            <h2>{{ CourseDescription }}</h2>
+            {% if ShowScholarship %}
+                {{ snippets["UpcomingEvents/ScholarshipText/Header"] }}
+                {% if CourseCode == 'DEP' %}
+                    {{ snippets["UpcomingEvents/ScholarshipText/DEPBody"] }}
+                {% else%}
+                    {{ snippets["UpcomingEvents/ScholarshipText/Body"] }}
+                {% endif %}
+
+                {{ snippets["UpcomingEvents/ScholarshipText/Footer"] }} 
+                
+            {% else %}
+                {{ snippets["UpcomingEvents/Intro"] }}
+            {% endif %}
+             
+            
+            <table border="1" cellspacing="0" cellpadding="8" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background-color: #f3f3f3;">
+                        <th style="text-align: left;"><a href="#" style="color: #007baf; text-decoration: none;">{{ snippets["UpcomingEvents/CourseNameHeader"] }}</a></th>
+						<th style="text-align: left;"><a href="#" style="color: #007baf; text-decoration: none;">{{ snippets["UpcomingEvents/CityHeader"] }}</a></th>
+                        <th style="text-align: left;"><a href="#" style="color: #007baf; text-decoration: none;">{{ snippets["UpcomingEvents/ApplicationDeadlineHeader"] }}</a></th>
+						<th style="text-align: left;"><a href="#" style="color: #007baf; text-decoration: none;">{{ snippets["UpcomingEvents/CourseStartDateHeader"] }}</a></th>
+                        <th style="text-align: left;"><a href="#" style="color: #007baf; text-decoration: none;">{{ snippets["UpcomingEvents/CourseDateHeader"] }}</a></th>
+                        <th style="text-align: left;"><a href="#" style="color: #007baf; text-decoration: none;">{{ snippets["UpcomingEvents/CourseStatusHeader"] }}</a></th>
+                        {% if CourseCode == 'GEP' or CourseCode == 'DEP' %}<th></th>{% endif %}  
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                    {% for events in UpcomingEvents.results.entities %}
+
+                        {% if events.icd_recordsubtype.value == "100000005" %}
+                            {% assign formTypeId = BDPFormType %}
+                        {% elsif events.icd_recordsubtype.value == "100000001" %}
+                            {% assign formTypeId = DEPFormType %}
+                            {% assign scholarformTypeId = DEPScholarFormType %}
+                        {% elsif events.icd_recordsubtype.value == "100000000"  or events.icd_recordsubtype.value == "100000006" %}
+                            {% assign formTypeId = ShortCourseFormType %}
+                        {% elsif events.icd_recordsubtype.value == "100000007"%}
+                            {% assign formTypeId = GEPFormType %}
+                            {% assign scholarformTypeId = GEPScholarFormType %}
+                        {% endif %}
+
+                        {% assign nowDateTime = now | date: 'yyyyMMdd' | integer %}
+                        {% assign evtEndDateTime = events.msevtmgt_eventenddate | date: 'yyyyMMdd' | integer %}
+                        {% assign stopDateTime = events.msevtmgt_stopwebsiteregistrationson | date: 'yyyyMMdd' | integer %}
+                        {% assign isRegCloseDate = events.msevtmgt_setregistrationsenddate | date: 'yyyyMMdd' | integer %}
+
+                        {% assign regCount = events.msevtmgt_registrationcount | integer %}
+                        {% assign maxCap = events.msevtmgt_maximumeventcapacity | integer %}
+                        {% assign courseStatus = snippets["UpcomingEvents/CourseStatus"] %}
+                        {% assign ButtonLabel = snippets["UpcomingEvents/ApplyButton"]  %}
+                        {% assign DisplayScholarshipButton = events.icd_displayscholarship %}
+                        
+                        {% if isRegCloseDate %}
+                            {% if stopDateTime > nowDateTime %}
+                                {% assign IsEventAvailable = true %}
+                            {% else %}
+                                {% assign IsEventAvailable = false %}
+                            {% endif %}
+                        {% else %}
+                            {% if evtEndDateTime > nowDateTime %}
+                                {% assign IsEventAvailable = true %}
+                            {% else %}
+                                {% assign IsEventAvailable = false %}
+                            {% endif %}
+                        {% endif %}
+
+                        {% if regCount < maxCap %}
+                        {% else %}
+                            {% if (events.icd_waitinglist and IsEventAvailable) %}
+                                {% assign courseStatus = snippets["UpcomingEvents/WaitlisCourseStatus"] %}
+                                {% assign ButtonLabel = snippets["UpcomingEvents/WaitlistButton"] %}
+                            {% else %}
+                                {% assign IsEventAvailable = false %}
+                            {% endif %}
+                        {% endif %}
+
+                        
+                        {% if IsEventAvailable %}
+                            <tr>
+                                <td data-label="Course Name">{{ events.msevtmgt_name}}</td>
+								<td data-label="City">
+                                    {% if events.icd_deliverymethod.value == 100000000 %} <!--In Person-->
+                                        {{events['EventBuilding.msevtmgt_city']}}
+                                    {%elsif events.icd_deliverymethod.value == 100000001 %} <!--Online-->
+                                        Online
+                                    {% endif %}
+                                </td>
+                                {% if events.msevtmgt_setregistrationsenddate %}
+                                    <td data-label="Application Deadline">{{ events.msevtmgt_stopwebsiteregistrationson | date: 'MMMM dd, yyyy'  }}</td>
+                                {% else %}
+                                    <td data-label="Application Deadline">{{ events.msevtmgt_eventstartdate | date: 'MMMM dd, yyyy'  }}</td>
+                                {% endif %}
+								<td data-label="Course Start Date">{{ events.msevtmgt_eventstartdate | date: 'MMMM dd, yyyy' }}</td>
+                                <td data-label="Course Date">{{ events.msevtmgt_eventstartdate | date: "hh:mm tt"  }} to {{ events.msevtmgt_eventenddate | date: "hh:mm tt"  }}</td>
+                                <td data-label="Course Status">{{courseStatus}}</td>
+                                {% if DisplayScholarshipButton  %}
+                                {% if (CourseCode == 'GEP' or CourseCode == 'DEP') %}
+                                    <td data-label="Scholarship">
+                                    <button style="background-color: #002f5f; color: white; border: none; padding: 8px 12px; cursor: pointer;" 
+                                        onclick="window.location.href='{{ sitemarkers["Application"].url }}?formType={{scholarformTypeId}}&eventId={{ events.msevtmgt_eventid }}'">
+                                        {{ snippets["UpcomingEvents/ScholarshipButton"] }}
+                                        </button>
+                                    </td>
+                                {% endif %}
+                                {% endif %}
+                                <td data-label="Apply"><button style="background-color: #002f5f; color: white; border: none; padding: 8px 12px; cursor: pointer;" 
+                                    onclick="window.location.href='{{ sitemarkers["Application"].url }}?formType={{formTypeId}}&eventId={{ events.msevtmgt_eventid }}'">
+                                    {{ButtonLabel}}
+                                </button></td>
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>            
+        </div>
+</body>
+</html>
+{%else%}
+
+<div class="containerUpcomingEvents">
+
+    {{ snippets["UpcomingEvents/NoCourseAvailableText"] }}
+    
+</div>
+
+{% endif %}
+{% endblock %}
